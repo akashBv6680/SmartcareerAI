@@ -82,17 +82,42 @@ def generate_user_embedding(user_profile, model):
     )
     return model.encode([profile_text])[0].reshape(1, -1)
 
+def map_prerequisite_level(level_str):
+    mapping = {'none': 0, 'basic': 1, 'beginner': 1, 'intermediate': 2, 'advanced': 3}
+    if pd.isna(level_str):
+        return 0
+    cleaned_level = str(level_str).strip().lower()
+    return mapping.get(cleaned_level, 0)
+
+def map_course_level(level_str):
+    mapping = {'beginner': 1, 'intermediate': 2, 'advanced': 3}
+    if pd.isna(level_str):
+        return 0
+    cleaned_level = str(level_str).strip().lower()
+    if '/' in cleaned_level:
+        cleaned_level = cleaned_level.split('/')[0]
+    return mapping.get(cleaned_level, 0)
+
 def generate_llm_rationale(client, user_profile, course_row, timeline_type):
     if not client:
         return f"LLM Rationale Unavailable. Heuristic: Good fit for {course_row['level']} level. It is a {timeline_type} step."
-    prompt = f"""Act as a highly experienced Career Counselor....
-    User Profile: Education: {user_profile['education_level']} in {user_profile['major']}
-    Skills: {user_profile['technical_skills']}
-    Goal: Career switch/growth into {user_profile['target_domain']}
-    Course Recommended: Title: {course_row['title']} by {course_row['provider']}
-    Level: {course_row['level']} ({timeline_type} plan)
-    Key Skills Taught: {course_row['skill_tags']}
-    Prerequisites: {course_row['prerequisites']}
+    prompt = f"""
+    Act as a highly experienced Career Counselor. Given the user profile and the recommended course,
+    provide a **concise, two-sentence rationale** (less than 40 words total).
+
+    ---
+    User Profile:
+    - Education: {user_profile['education_level']} in {user_profile['major']}
+    - Skills: {user_profile['technical_skills']}
+    - Goal: Career switch/growth into {user_profile['target_domain']}
+
+    Course Recommended:
+    - Title: {course_row['title']} by {course_row['provider']}
+    - Level: {course_row['level']} ({timeline_type} plan)
+    - Key Skills Taught: {course_row['skill_tags']}
+    - Prerequisites: {course_row['prerequisites']}
+    ---
+
     Sentence 1 (Matching): Explain which existing user skills connect to the course content.
     Sentence 2 (Gap/Next Step): Explain what new, specific skill or knowledge gap this course fills for the user's target domain.
     """
@@ -112,14 +137,37 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
     results_df = courses_df.copy()
     results_df['similarity_score'] = similarity_scores
 
-    # Prerequisite and Level matching, scoring, filtering - same logic as your code
-    # ... (add all your filtering, mapping, scoring logic here unchanged)
-    # For brevity, the rest remains as in your original app.
+    # Level and prerequisite logic
+    user_level = 1 # Beginner
+    if 'intermediate' in user_profile['technical_skills'].lower() or user_profile['education_level'] in ['Master\'s', 'PhD']:
+        user_level = 2
+    if 'advanced' in user_profile['technical_skills'].lower() or user_profile['education_level'] == 'PhD':
+        user_level = 3
 
-    # Generate LLM rationale
-    # ... unchanged, just call generate_llm_rationale as needed
-    # Return recommendations df
-    ...
+    results_df['course_level_num'] = results_df['level'].apply(map_course_level)
+    results_df['prereq_level_num'] = results_df['prerequisites'].apply(
+        lambda x: 0 if pd.isna(x) else map_prerequisite_level(str(x).split(',')[0].strip())
+    )
+    results_df['prereq_penalty'] = np.where(
+        results_df['prereq_level_num'] > user_level, 0.5, 1.0
+    )
+    results_df['fit_score'] = (results_df['similarity_score'] * 100 * results_df['prereq_penalty']).round(1)
+    ranked_courses = results_df.sort_values(by='fit_score', ascending=False).head(10).copy()
+
+    def assign_timeline(row):
+        is_basic = row['level'] in ['Beginner', 'Intermediate']
+        duration_lower = str(row['duration']).lower()
+        is_short = 'week' in duration_lower or ('month' in duration_lower and int(duration_lower.split()[0]) <= 2)
+        if is_basic and is_short and row['fit_score'] >= 50:
+            return 'Short-Term'
+        elif row['fit_score'] >= 40:
+            return 'Long-Term'
+        return 'Long-Term'
+    ranked_courses['timeline'] = ranked_courses.apply(assign_timeline, axis=1)
+    ranked_courses['rationale'] = ranked_courses.apply(
+        lambda row: generate_llm_rationale(llm_client, user_profile, row, row['timeline']), axis=1
+    )
+    return ranked_courses
 
 def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
     query_embed = model.encode([query])[0].reshape(1, -1)
@@ -137,19 +185,19 @@ def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
 
 def run_rag_query(query, courses_df, course_embeddings, model, llm_client):
     if not llm_client:
-        return "The AI Agent is not initialized. Please ensure your Gemini API key is configured correctly."
-
+        return "The AI Agent is not initialized."
     context = get_rag_context(query, courses_df, course_embeddings, model)
-    rag_prompt = f"""You are the **PersonalAI Course Recommender** chatbot....
+    rag_prompt = f"""
+    You are the **PersonalAI Course Recommender** chatbot.
     User Query: "{query}"
     Context (Relevant Courses): ---
     {context}
     ---
-    Based on the context, provide a concise, helpful answer. If the context does not contain the answer, state that you cannot find the information in the current catalog."""
+    Provide a concise, helpful answer. If context does not contain the answer, state that you cannot find the information in the current catalog.
+    """
     try:
         response = llm_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=rag_prompt
+            model='gemini-2.5-flash', contents=rag_prompt
         )
         return response.text.strip()
     except Exception as e:
@@ -170,7 +218,7 @@ def text_to_speech_conversion(text, lang_code, engine="gtts"):
             mp3_fp.seek(0)
             return mp3_fp
         else:
-            st.warning("No TTS engine available for audio playback.")
+            st.warning("No TTS engine available.")
             return None
     except Exception as e:
         st.warning(f"TTS Error: Could not generate speech with code '{lang_code}'. Try a different voice. Details: {e}")
@@ -247,27 +295,22 @@ with col_output:
         else:
             with st.spinner("Analyzing profile, computing similarity, and generating LLM rationale..."):
                 recommendations_df = recommend_courses(
-                    USER_PROFILE, 
-                    COURSES_DF, 
-                    COURSE_EMBEDDINGS, 
+                    USER_PROFILE,
+                    COURSES_DF,
+                    COURSE_EMBEDDINGS,
                     MODEL,
                     LLM_CLIENT
                 )
-            
             st.markdown(f"### 🎯 Learning Path for **{target_domain}**")
             st.markdown(f"**Based on:** {USER_PROFILE['technical_skills']}")
-            
             # --- SHORT-TERM PLAN ---
             st.divider()
             st.subheader("🗓️ Short-Term Plan (Next 1-3 Months)")
             st.caption("Foundational, high-impact courses for immediate skill gain.")
-            
             short_term = recommendations_df[recommendations_df['timeline'] == 'Short-Term']
-            
             if not short_term.empty:
                 for i, row in short_term.iterrows():
                     st.success(f"**{row['title']}** ({row['provider']})")
-                    
                     cols = st.columns([1, 1, 1, 4])
                     cols[0].metric("Fit Score", f"{row['fit_score']}%")
                     cols[1].metric("Level", row['level'])
@@ -277,18 +320,14 @@ with col_output:
                     st.markdown("---")
             else:
                 st.info("No courses prioritized for the short term based on current criteria.")
-
             # --- LONG-TERM PLAN ---
             st.divider()
             st.subheader("📚 Long-Term Plan (Next 3-12 Months)")
             st.caption("Specialization and advanced certifications to achieve your career goal.")
-            
             long_term = recommendations_df[recommendations_df['timeline'] == 'Long-Term']
-
             if not long_term.empty:
                 for i, row in long_term.iterrows():
                     st.info(f"**{row['title']}** ({row['provider']})")
-                    
                     cols = st.columns([1, 1, 1, 4])
                     cols[0].metric("Fit Score", f"{row['fit_score']}%")
                     cols[1].metric("Level", row['level'])
@@ -305,32 +344,21 @@ with col_output:
     st.divider()
     st.header("💬 PersonalAI Course Recommender (RAG Agent)")
     st.caption("Ask questions about the courses in the catalog (e.g., 'What are the prerequisites for the AWS course?' or 'Tell me about the Data Science beginner courses').")
-
-    # Display chat messages from history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-
-    # Accept user input
     if prompt := st.chat_input("Ask a question about the courses in the catalog..."):
-        # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
-
-        # Generate and display bot response
         with st.chat_message("assistant"):
             with st.spinner("Searching catalog and thinking..."):
                 response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT)
-            
             st.markdown(response_text)
-            
-            # Text-to-Speech Output (The requested feature)
             if st.session_state.tts_enabled:
-                lang_code = TTS_LANGUAGES.get(st.session_state.tts_language, "en") # Fallback to 'en'
-                audio_data = text_to_speech_conversion(response_text, lang_code)
+                lang_code = LANGUAGE_DICT.get(st.session_state.tts_language, "en")
+                tts_engine = st.session_state.tts_engine
+                audio_data = text_to_speech_conversion(response_text, lang_code, engine=tts_engine)
                 if audio_data:
-                    st.audio(audio_data, format='audio/mp3', autoplay=True)
-            
-            # Add assistant response to chat history
+                    st.audio(audio_data, format="audio/mp3", autoplay=True)
             st.session_state.messages.append({"role": "assistant", "content": response_text})
