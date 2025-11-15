@@ -240,8 +240,97 @@ with col_input:
 
 with col_output:
     st.markdown("## 🧠 Recommendation and Chat Output")
-    # ... (main recommendations and conversation logic, unchanged except TTS section below)
-    # In chat/assistant display, just update TTS logic to:
-    # lang_code = LANGUAGE_DICT.get(st.session_state.tts_language, "en")
-    # audio_data = text_to_speech_conversion(response_text, lang_code, engine=st.session_state.tts_engine)
-    # if audio_data: st.audio(audio_data, format='audio/mp3', autoplay=True)
+    if st.session_state.get('path_generated', False):
+        if not USER_PROFILE['technical_skills'].strip() or not USER_PROFILE['target_domain'].strip():
+            st.error("Please provide at least your Technical Skills and Target Career Domain.")
+            st.session_state['path_generated'] = False
+        else:
+            with st.spinner("Analyzing profile, computing similarity, and generating LLM rationale..."):
+                recommendations_df = recommend_courses(
+                    USER_PROFILE, 
+                    COURSES_DF, 
+                    COURSE_EMBEDDINGS, 
+                    MODEL,
+                    LLM_CLIENT
+                )
+            
+            st.markdown(f"### 🎯 Learning Path for **{target_domain}**")
+            st.markdown(f"**Based on:** {USER_PROFILE['technical_skills']}")
+            
+            # --- SHORT-TERM PLAN ---
+            st.divider()
+            st.subheader("🗓️ Short-Term Plan (Next 1-3 Months)")
+            st.caption("Foundational, high-impact courses for immediate skill gain.")
+            
+            short_term = recommendations_df[recommendations_df['timeline'] == 'Short-Term']
+            
+            if not short_term.empty:
+                for i, row in short_term.iterrows():
+                    st.success(f"**{row['title']}** ({row['provider']})")
+                    
+                    cols = st.columns([1, 1, 1, 4])
+                    cols[0].metric("Fit Score", f"{row['fit_score']}%")
+                    cols[1].metric("Level", row['level'])
+                    cols[2].metric("Duration", row['duration'])
+                    cols[3].markdown(f"**Rationale:** {row['rationale']}")
+                    st.markdown(f"**Enroll:** [Access Course Link Here]({row['link']})")
+                    st.markdown("---")
+            else:
+                st.info("No courses prioritized for the short term based on current criteria.")
+
+            # --- LONG-TERM PLAN ---
+            st.divider()
+            st.subheader("📚 Long-Term Plan (Next 3-12 Months)")
+            st.caption("Specialization and advanced certifications to achieve your career goal.")
+            
+            long_term = recommendations_df[recommendations_df['timeline'] == 'Long-Term']
+
+            if not long_term.empty:
+                for i, row in long_term.iterrows():
+                    st.info(f"**{row['title']}** ({row['provider']})")
+                    
+                    cols = st.columns([1, 1, 1, 4])
+                    cols[0].metric("Fit Score", f"{row['fit_score']}%")
+                    cols[1].metric("Level", row['level'])
+                    cols[2].metric("Duration", row['duration'])
+                    cols[3].markdown(f"**Rationale:** {row['rationale']}")
+                    st.markdown(f"**Enroll:** [Access Course Link Here]({row['link']})")
+                    st.markdown("---")
+            else:
+                st.info("No courses recommended for the long term.")
+    else:
+        st.info("Please set up your profile on the left and click 'Generate Learning Path' to view recommendations.")
+
+    # --- RAG CHATBOT UI ---
+    st.divider()
+    st.header("💬 PersonalAI Course Recommender (RAG Agent)")
+    st.caption("Ask questions about the courses in the catalog (e.g., 'What are the prerequisites for the AWS course?' or 'Tell me about the Data Science beginner courses').")
+
+    # Display chat messages from history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Accept user input
+    if prompt := st.chat_input("Ask a question about the courses in the catalog..."):
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Generate and display bot response
+        with st.chat_message("assistant"):
+            with st.spinner("Searching catalog and thinking..."):
+                response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT)
+            
+            st.markdown(response_text)
+            
+            # Text-to-Speech Output (The requested feature)
+            if st.session_state.tts_enabled:
+                lang_code = TTS_LANGUAGES.get(st.session_state.tts_language, "en") # Fallback to 'en'
+                audio_data = text_to_speech_conversion(response_text, lang_code)
+                if audio_data:
+                    st.audio(audio_data, format='audio/mp3', autoplay=True)
+            
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
