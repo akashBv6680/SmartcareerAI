@@ -83,6 +83,7 @@ def load_data():
     if 'skill tags' in courses_df.columns:
         courses_df = courses_df.rename(columns={'skill tags': 'skill_tags'})
     model = load_model()
+    # Including all text fields for embedding relevance calculation
     courses_df['search_text'] = (
         courses_df['title'] + " " + courses_df['skill_tags'] + " " +
         courses_df['provider'] + " " + courses_df['level'] + " " +
@@ -188,16 +189,19 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
     return ranked_courses
 
 def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
+    """Retrieves the most relevant course data using vector search, including the link."""
     query_embed = model.encode([query])[0].reshape(1, -1)
     similarity_scores = cosine_similarity(query_embed, course_embeddings)[0]
     top_indices = np.argsort(similarity_scores)[::-1][:top_k]
     context = ""
     for i in top_indices:
         row = courses_df.iloc[i]
+        # UPDATED: Including the 'Link' field in the context provided to the LLM
         context += (
             f"Course Title: {row['title']}, Provider: {row['provider']}, "
             f"Level: {row['level']}, Duration: {row['duration']}, "
-            f"Skills: {row['skill_tags']}, Prerequisites: {row['prerequisites']} \n"
+            f"Skills: {row['skill_tags']}, Prerequisites: {row['prerequisites']}, "
+            f"Link: {row['link']} \n"
         )
     return context.strip()
 
@@ -206,7 +210,8 @@ def run_rag_query(query, courses_df, course_embeddings, model, llm_client):
         return "The AI Agent is not initialized."
     context = get_rag_context(query, courses_df, course_embeddings, model)
     rag_prompt = f"""
-    You are the **PersonalAI Course Recommender** chatbot.
+    You are the **PersonalAI Course Recommender** chatbot. Your goal is to answer questions about learning paths and courses based *only* on the provided context. If the user asks for a link, provide the URL found in the context.
+
     User Query: "{query}"
     Context (Relevant Courses): ---
     {context}
@@ -227,8 +232,14 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
             voice_name = EDGE_TTS_VOICE_DICT.get(lang_name, "en-US-AriaNeural")
             communicate = edge_tts.Communicate(text, voice_name)
             audio_bytes = b""
-            for chunk in communicate.stream():
-                audio_bytes += chunk
+            # Stream the audio to get all chunks
+            import asyncio
+            async def run_tts():
+                nonlocal audio_bytes
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_bytes += chunk["content"]
+            asyncio.run(run_tts())
             return io.BytesIO(audio_bytes)
         elif engine == "gtts" and gTTS is not None:
             tts = gTTS(text=text, lang=lang_code)
@@ -237,10 +248,10 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
             mp3_fp.seek(0)
             return mp3_fp
         else:
-            st.warning("No TTS engine available for audio playback.")
+            st.warning("No functional TTS engine available for audio playback.")
             return None
     except Exception as e:
-        st.warning(f"TTS Error: Could not generate speech with code '{lang_code}'. Try a different voice. Details: {e}")
+        st.warning(f"TTS Error: Could not generate speech. Details: {e}")
         return None
 
 # --- STREAMLIT UI CODE ---
@@ -251,7 +262,8 @@ if "tts_enabled" not in st.session_state:
 if "tts_language" not in st.session_state:
     st.session_state.tts_language = DEFAULT_LANGUAGE
 if "tts_engine" not in st.session_state:
-    st.session_state.tts_engine = "gtts"
+    # Default to gtts if available, otherwise edge_tts (if installed)
+    st.session_state.tts_engine = "gtts" if gTTS else ("edge_tts" if edge_tts else "None")
 
 st.set_page_config(layout="wide", page_title="AI Learning Path Recommender")
 st.title("💡 AI-Powered Personalized Learning Path Recommender")
@@ -301,9 +313,19 @@ with col_input:
     st.subheader("🗣️ PersonalAI Chat Settings")
     st.session_state.tts_enabled = st.checkbox("Enable Text-to-Speech (TTS) Reply", value=st.session_state.tts_enabled)
     if st.session_state.tts_enabled:
-        selected_lang_name = st.selectbox("Select Voice Language:", list(LANGUAGE_DICT.keys()), index=list(LANGUAGE_DICT.keys()).index(st.session_state.tts_language) if st.session_state.tts_language in LANGUAGE_DICT else 0)
+        selected_lang_name = st.selectbox("Select Voice Language:", list(LANGUAGE_DICT.keys()), key='tts_language_selector', index=list(LANGUAGE_DICT.keys()).index(st.session_state.tts_language) if st.session_state.tts_language in LANGUAGE_DICT else 0)
         st.session_state.tts_language = selected_lang_name
-        st.session_state.tts_engine = st.selectbox("TTS Engine", ["gtts", "edge_tts"], index=0 if gTTS else 1)
+        
+        # Determine available engines and set default
+        available_engines = []
+        if gTTS: available_engines.append("gtts")
+        # NOTE: edge_tts requires asynchronous calls not natively supported by Streamlit's simple script execution model,
+        # but the code handles it via asyncio.run. We ensure it's selectable if the import succeeded.
+        if edge_tts: available_engines.append("edge_tts")
+        if not available_engines: available_engines.append("None")
+
+        current_engine_index = available_engines.index(st.session_state.tts_engine) if st.session_state.tts_engine in available_engines else 0
+        st.session_state.tts_engine = st.selectbox("TTS Engine", available_engines, index=current_engine_index)
 
 with col_output:
     st.markdown("## 🧠 Recommendation and Chat Output")
@@ -374,13 +396,22 @@ with col_output:
             with st.spinner("Searching catalog and thinking..."):
                 response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT)
             st.markdown(response_text)
-            if st.session_state.tts_enabled:
+            if st.session_state.tts_enabled and st.session_state.tts_engine != "None":
                 lang_name = st.session_state.tts_language
                 lang_code = LANGUAGE_DICT.get(lang_name, "en")
                 tts_engine = st.session_state.tts_engine
-                audio_data = text_to_speech_conversion(
-                    response_text, lang_code, engine=tts_engine, lang_name=lang_name
-                )
+                
+                # Handling the asyncio requirement for edge_tts if selected
+                if tts_engine == "edge_tts" and edge_tts is not None:
+                    # The function text_to_speech_conversion handles the asyncio.run call internally now.
+                    audio_data = text_to_speech_conversion(
+                        response_text, lang_code, engine=tts_engine, lang_name=lang_name
+                    )
+                else:
+                    audio_data = text_to_speech_conversion(
+                        response_text, lang_code, engine="gtts"
+                    )
+
                 if audio_data:
                     st.audio(audio_data, format="audio/mp3", autoplay=True)
             st.session_state.messages.append({"role": "assistant", "content": response_text})
