@@ -8,12 +8,10 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
 from gtts import gTTS 
-from gtts import lang as gtts_lang # To get supported languages if needed
 
 # --- 0. CONFIGURATION & UTILITIES ---
 
 # List of supported languages for gTTS (20+ for multilingual selection)
-# Note: Using a curated list for simplicity in the Streamlit app.
 TTS_LANGUAGES = {
     "English (US)": "en",
     "English (UK)": "en-GB",
@@ -67,10 +65,21 @@ def load_data():
     except FileNotFoundError:
         st.error("Error: 'courses.csv' not found. Please create the file with the required columns.")
         st.stop()
+    
+    # --- FIX 1: Clean column names ---
+    # Strip spaces and convert to lowercase to handle variations like ' Title ' or 'Skill Tags'
+    courses_df.columns = courses_df.columns.str.strip().str.lower()
+    
+    # --- FIX 2: Rename 'skill tags' to 'skill_tags' ---
+    # The rest of the code expects 'skill_tags' (with an underscore)
+    if 'skill tags' in courses_df.columns:
+        courses_df = courses_df.rename(columns={'skill tags': 'skill_tags'})
+    # --------------------------------------------------
         
     model = load_model()
     
     # Concatenate relevant course text for embedding
+    # Note: Column names are now guaranteed to be lowercase and use underscores
     courses_df['search_text'] = (
         courses_df['title'] + " " + courses_df['skill_tags'] + " " + 
         courses_df['provider'] + " " + courses_df['level'] + " " +
@@ -149,9 +158,9 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
     results_df['similarity_score'] = similarity_scores
     
     user_level = 1
-    if 'intermediate' in user_profile['technical_skills'].lower() or user_profile['education_level'] in ['Master\'s', 'PhD']:
+    if 'intermediate' in user_profile['technical_skills'].lower() or user_profile['education_level'] in ['master\'s', 'phd']:
         user_level = 2
-    if 'advanced' in user_profile['technical_skills'].lower() or user_profile['education_level'] == 'PhD':
+    if 'advanced' in user_profile['technical_skills'].lower() or user_profile['education_level'] == 'phd':
         user_level = 3
         
     results_df['course_level_num'] = results_df['level'].apply(map_course_level)
@@ -236,8 +245,6 @@ def run_rag_query(query, courses_df, course_embeddings, model, llm_client):
         return response.text.strip()
     except Exception as e:
         return f"Error communicating with the Gemini model: {e}"
-
-# --- UPDATED TTS FUNCTION ---
 
 def text_to_speech_conversion(text, lang_code):
     """Converts text to speech using gTTS and returns audio data."""
@@ -365,7 +372,6 @@ with col_input:
     st.markdown("---")
     if st.button("🚀 Generate Learning Path", type="primary"):
         st.session_state['path_generated'] = True
-        # Clear chat history when new path is generated as context might change
         st.session_state.messages = [] 
     
     # RAG Chatbot TTS Options
@@ -479,7 +485,6 @@ with col_output:
                 lang_code = TTS_LANGUAGES[st.session_state.tts_language]
                 audio_data = text_to_speech_conversion(response_text, lang_code)
                 if audio_data:
-                    # Provide text-to-speech option
                     st.audio(audio_data, format='audio/mp3', autoplay=True)
             
             # Add assistant response to chat history
