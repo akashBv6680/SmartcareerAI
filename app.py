@@ -3,11 +3,11 @@ import pandas as pd
 import numpy as np
 import json
 import os
-import io 
+import io
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
-from gtts import gTTS 
+from gtts import gTTS
 
 # --- 0. CONFIGURATION & UTILITIES ---
 
@@ -75,7 +75,7 @@ def load_data():
     if 'skill tags' in courses_df.columns:
         courses_df = courses_df.rename(columns={'skill tags': 'skill_tags'})
     # --------------------------------------------------
-        
+    
     model = load_model()
     
     # Concatenate relevant course text for embedding
@@ -288,7 +288,8 @@ def text_to_speech_conversion(text, lang_code):
         mp3_fp.seek(0)
         return mp3_fp
     except Exception as e:
-        st.error(f"TTS Error: Could not generate speech with code '{lang_code}'. Try a different voice. Details: {e}")
+        # Use st.warning instead of st.error for a less aggressive message in UI
+        st.warning(f"TTS Error: Could not generate speech with code '{lang_code}'. Try a different voice. Details: {e}")
         return None
 
 # --- 3. STREAMLIT UI CODE ---
@@ -315,8 +316,7 @@ try:
     LLM_CLIENT = setup_llm() 
 except Exception as e:
     st.error(f"Could not initialize system components: {e}. Check dependencies and API key.")
-    st.stop()
-
+    # st.stop() # Commented out so the user can still see the UI elements
 
 # Load sample profiles (assuming a profiles.json file exists)
 try:
@@ -411,10 +411,15 @@ with col_input:
     st.subheader("🗣️ PersonalAI Chat Settings")
     
     # TTS Enable/Disable
-    st.session_state.tts_enabled = st.checkbox("Enable Text-to-Speech (TTS) Reply", value=st.session_state.tts_enabled)
+    st.session_state.tts_enabled = st.checkbox(
+        "Enable Text-to-Speech (TTS) Reply", 
+        value=st.session_state.tts_enabled, 
+        help="The chatbot's text responses will be read aloud."
+    )
     
     # Language Selection
     if st.session_state.tts_enabled:
+        # Use key to avoid conflict with other session state keys if they exist
         selected_lang_name = st.selectbox(
             "Select Voice Language/Accent:",
             list(TTS_LANGUAGES.keys()),
@@ -513,9 +518,9 @@ with col_output:
             
             st.markdown(response_text)
             
-            # Text-to-Speech Output
+            # Text-to-Speech Output (The requested feature)
             if st.session_state.tts_enabled:
-                lang_code = TTS_LANGUAGES[st.session_state.tts_language]
+                lang_code = TTS_LANGUAGES.get(st.session_state.tts_language, "en") # Fallback to 'en'
                 audio_data = text_to_speech_conversion(response_text, lang_code)
                 if audio_data:
                     st.audio(audio_data, format='audio/mp3', autoplay=True)
