@@ -1,0 +1,26 @@
+{
+  "Beginner Data Analyst": {
+    "education_level": "Bachelor's",
+    "major": "Economics",
+    "technical_skills": "Excel, Basic SQL, R",
+    "soft_skills": "Communication, Problem-Solving, Teamwork",
+    "target_domain": "Data Science",
+    "preferred_duration": "Short-term"
+  },
+  "Intermediate Software Developer": {
+    "education_level": "Master's",
+    "major": "Computer Science",
+    "technical_skills": "Python, Java, Git, Django, PostgreSQL",
+    "soft_skills": "Agile, Leadership, Mentoring",
+    "target_domain": "Machine Learning Engineering",
+    "preferred_duration": "Long-term"
+  },
+  "Career Switcher (Marketing to UX)": {
+    "education_level": "Bachelor's",
+    "major": "Marketing",
+    "technical_skills": "SEO, Google Analytics, Basic HTML/CSS",
+    "soft_skills": "Creativity, Empathy, Presentation",
+    "target_domain": "UX/UI Design",
+    "preferred_duration": "Any"
+  }
+}
