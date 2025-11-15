@@ -66,20 +66,23 @@ def determine_recommended_prep(user_skills, course_prerequisites):
 def generate_rationale_and_gap(user_profile, course_row):
     """Generates the justification text using a simple prompt-like structure."""
     
-    user_skills = user_profile['technical_skills'].lower().split(', ')
-    course_skills = course_row['skill_tags'].lower().split(', ')
+    # Ensure all strings are lowercase lists for comparison
+    user_skills = [s.strip() for s in user_profile['technical_skills'].lower().split(',')]
+    course_skills = [s.strip() for s in course_row['skill_tags'].lower().split(',')]
     target_domain = user_profile['target_domain']
     
     # 1. Matching
-    matched_skills = [s.capitalize() for s in user_skills if s in course_skills]
+    matched_skills = [s.capitalize() for s in user_skills if s in course_skills and s]
     match_str = f"This course aligns with your current skills in **{', '.join(matched_skills[:2])}**." if matched_skills else ""
     
     # 2. Gap Filling (what new skill does it offer)
-    new_skills = [s.capitalize() for s in course_skills if s not in user_skills]
+    new_skills = [s.capitalize() for s in course_skills if s not in user_skills and s]
     gap_str = f"It will fill the gap by teaching you **{', '.join(new_skills[:2])}** needed for a role in **{target_domain}**."
     
     # 3. Preparation
-    prep_str = determine_recommended_prep(user_profile['technical_skills'], course_row['prerequisites'])
+    # Need to handle potential NaN in prereqs before passing to function
+    prereqs = str(course_row['prerequisites']) if not pd.isna(course_row['prerequisites']) else 'None'
+    prep_str = determine_recommended_prep(user_profile['technical_skills'], prereqs)
     
     return f"{match_str} {gap_str} {prep_str}".strip()
 
@@ -98,22 +101,24 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model):
     
     # 3. Prerequisite and Level Matching Logic (Filtering/Penalty)
     
-    # Convert user and course levels to numerical values
-    # For simplification, we'll assume a user is at a level that is roughly 
-    # Intermediate (2) if they have a degree, and Advanced (3) if they have a 
-    # degree + many skills. Here, we use a simple heuristic:
-    user_level = 1 # Start at Beginner
+    # Heuristic for user's starting level
+    user_level = 1 # Beginner
     if 'intermediate' in user_profile['technical_skills'].lower() or user_profile['education_level'] in ['Master\'s', 'PhD']:
         user_level = 2
     if 'advanced' in user_profile['technical_skills'].lower() or user_profile['education_level'] == 'PhD':
         user_level = 3
         
     results_df['course_level_num'] = results_df['level'].apply(map_course_level)
-    results_df['prereq_level_num'] = results_df['prerequisites'].apply(lambda x: map_prerequisite_level(x.split(',')[0].strip())) 
     
+    # *** CORRECTION APPLIED HERE (Line 112) ***
+    # Handle NaN values in 'prerequisites' to avoid AttributeError
+    results_df['prereq_level_num'] = results_df['prerequisites'].apply(
+        lambda x: 0 if pd.isna(x) else map_prerequisite_level(str(x).split(',')[0].strip())
+    )
+    # ******************************************
+
     # Penalty for recommending too-advanced courses:
-    # If course level is 2 levels higher than user's heuristic level, significantly penalize score
-    # e.g., Beginner (1) recommending Advanced (3)
+    # If course prerequisite level is higher than user's heuristic level, significantly penalize score
     results_df['prereq_penalty'] = np.where(
         results_df['prereq_level_num'] > user_level, 0.5, 1.0 
     )
@@ -125,16 +130,17 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model):
     ranked_courses = results_df.sort_values(by='fit_score', ascending=False).head(10)
     
     # 5. Generate Rationale and Timeline
+    # Ensure rationale generation is robust to missing data
     ranked_courses['rationale'] = ranked_courses.apply(
         lambda row: generate_rationale_and_gap(user_profile, row), axis=1
     )
     
     # Simple Timeline Logic: 
-    # High fit_score, Beginner/Intermediate, and short duration go to Short-Term.
-    # Lower fit_score, Advanced, and long duration go to Long-Term.
     def assign_timeline(row):
         is_basic = row['level'] in ['Beginner', 'Intermediate']
-        is_short = 'week' in row['duration'].lower() or ('month' in row['duration'].lower() and int(row['duration'].split()[0]) <= 2)
+        # Check if duration contains 'week' or is 'month' up to 2
+        duration_lower = row['duration'].lower()
+        is_short = 'week' in duration_lower or ('month' in duration_lower and int(duration_lower.split()[0]) <= 2)
         
         # Priority: Basic/Short courses with good fit score
         if is_basic and is_short and row['fit_score'] >= 50:
@@ -161,7 +167,8 @@ def format_json_output(df, profile_name):
             'provider': record['provider'],
             'duration': record['duration'],
             'level': record['level'],
-            'fit_score': float(record['fit_score']),
+            # Ensure fit_score is a Python float before JSON serialization
+            'fit_score': float(record['fit_score']), 
             'rationale': record['rationale'],
             'link': record['link']
         }
@@ -197,7 +204,7 @@ try:
     COURSES_DF, COURSE_EMBEDDINGS = load_data()
     MODEL = load_model()
 except Exception as e:
-    st.error(f"Could not load data or model: {e}")
+    st.error(f"Could not load data or model: {e}. Please check your `requirements.txt` and `courses.csv`.")
     st.stop()
 
 # Load sample profiles
@@ -214,9 +221,10 @@ except FileNotFoundError:
 with st.sidebar:
     st.header("👤 User Profile Input")
     
+    profile_keys = ["Manual Input"] + list(SAMPLE_PROFILES.keys())
     profile_selection = st.selectbox(
         "Load Sample Profile:",
-        ["Manual Input"] + list(SAMPLE_PROFILES.keys())
+        profile_keys
     )
     
     if profile_selection != "Manual Input":
@@ -228,10 +236,11 @@ with st.sidebar:
     # 1. Required Inputs
     st.subheader("Required Background")
     
+    education_options = ["Bachelor's", "Master's", "PhD", "High School/GED", "Certificate"]
     education_level = st.selectbox(
         "Education Level:",
-        ["Bachelor's", "Master's", "PhD", "High School/GED", "Certificate"],
-        index=["Bachelor's", "Master's", "PhD", "High School/GED", "Certificate"].index(loaded_profile.get('education_level', "Bachelor's"))
+        education_options,
+        index=education_options.index(loaded_profile.get('education_level', "Bachelor's"))
     )
     
     major = st.text_input(
@@ -257,10 +266,11 @@ with st.sidebar:
         value=loaded_profile.get('target_domain', "Data Science")
     )
     
+    duration_options = ["Short-term (1-3 months)", "Long-term (3-12 months)", "Any"]
     preferred_duration = st.selectbox(
         "Preferred Study Duration:",
-        ["Short-term (1-3 months)", "Long-term (3-12 months)", "Any"],
-        index=["Short-term (1-3 months)", "Long-term (3-12 months)", "Any"].index(loaded_profile.get('preferred_duration', "Any"))
+        duration_options,
+        index=duration_options.index(loaded_profile.get('preferred_duration', "Any"))
     )
     
     # Final User Profile Dict
@@ -281,6 +291,10 @@ with st.sidebar:
 
 if st.button("🚀 Generate Recommendations", type="primary"):
     
+    if not USER_PROFILE['technical_skills'].strip() or not USER_PROFILE['target_domain'].strip():
+        st.error("Please provide at least your Technical Skills and Target Career Domain.")
+        st.stop()
+        
     with st.spinner("Analyzing profile and computing similarity..."):
         # Run the matching engine
         recommendations_df = recommend_courses(
@@ -291,7 +305,7 @@ if st.button("🚀 Generate Recommendations", type="primary"):
         )
     
     st.header(f"🎯 Recommended Learning Path for **{target_domain}**")
-    st.write(f"**Current Skills:** {USER_PROFILE['technical_skills']}")
+    st.write(f"**Current Technical Skills:** {USER_PROFILE['technical_skills']}")
     
     
     # --- SHORT-TERM PLAN ---
@@ -313,7 +327,7 @@ if st.button("🚀 Generate Recommendations", type="primary"):
             st.markdown(f"**Enroll:** [Access Course Link Here]({row['link']})")
             st.markdown("---")
     else:
-        st.info("No courses prioritized for the short term based on current criteria.")
+        st.info("No courses prioritized for the short term based on current criteria. Moving to Long-Term focus.")
 
 
     # --- LONG-TERM PLAN ---
