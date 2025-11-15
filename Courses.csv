@@ -1,0 +1,10 @@
+title,provider,duration,prerequisites,skill_tags,level,link
+Python Crash Course,Coursera,4 Weeks,None,"Python, Basics, Programming, Data Types",Beginner,PLACEHOLDER_LINK
+Data Science Fundamentals,edX,6 Weeks,"Basic Math, Algebra","Data Science, Statistics, R, Visualization",Beginner,PLACEHOLDER_LINK
+Machine Learning Specialization,Stanford/Coursera,5 Months,"Calculus, Python, Linear Algebra","Machine Learning, Algorithms, PyTorch, Deep Learning",Advanced,PLACEHOLDER_LINK
+Agile Project Management,PMI,8 Weeks,None,"Agile, Scrum, Project Management, Communication",Intermediate,PLACEHOLDER_LINK
+Cloud Computing with AWS,AWS Training,10 Weeks,Basic Networking,"AWS, Cloud, Infrastructure, Networking, DevOps",Intermediate,PLACEHOLDER_LINK
+Effective Communication,LinkedIn Learning,2 Weeks,None,"Communication, Presentation, Leadership, Soft Skills",Beginner,PLACEHOLDER_LINK
+Advanced SQL and Database Design,Udemy,6 Weeks,Basic SQL,"SQL, Database, Normalization, Query Optimization",Intermediate,PLACEHOLDER_LINK
+Introduction to Web Development,FreeCodeCamp,3 Months,None,"HTML, CSS, JavaScript, Web Dev",Beginner,PLACEHOLDER_LINK
+TensorFlow Developer Certificate,Google,4 Months,"Advanced Python, ML Fundamentals","TensorFlow, Deep Learning, Neural Networks",Advanced,PLACEHOLDER_LINK
