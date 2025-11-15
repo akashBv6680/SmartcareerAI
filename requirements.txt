@@ -3,4 +3,5 @@ pandas
 scikit-learn
 sentence-transformers
 numpy
-google-genai 
+google-genai
+gTTS
