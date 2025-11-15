@@ -37,6 +37,24 @@ LANGUAGE_DICT = {
     "Dutch": "nl",
     "Turkish": "tr"
 }
+EDGE_TTS_VOICE_DICT = {
+    "English": "en-US-AriaNeural",
+    "Spanish": "es-ES-ElviraNeural",
+    "Arabic": "ar-EG-SalmaNeural",
+    "French": "fr-FR-DeniseNeural",
+    "German": "de-DE-KatjaNeural",
+    "Hindi": "hi-IN-SwaraNeural",
+    "Tamil": "ta-IN-PallaviNeural",
+    "Bengali": "bn-IN-TanishaaNeural",
+    "Japanese": "ja-JP-NanamiNeural",
+    "Korean": "ko-KR-SunHiNeural",
+    "Russian": "ru-RU-SvetlanaNeural",
+    "Chinese (Simplified)": "zh-CN-XiaoxiaoNeural",
+    "Portuguese": "pt-PT-FernandaNeural",
+    "Italian": "it-IT-ElsaNeural",
+    "Dutch": "nl-NL-ColetteNeural",
+    "Turkish": "tr-TR-EmelNeural"
+}
 DEFAULT_LANGUAGE = "English"
 
 def setup_llm():
@@ -203,12 +221,13 @@ def run_rag_query(query, courses_df, course_embeddings, model, llm_client):
     except Exception as e:
         return f"Error communicating with the Gemini model: {e}"
 
-def text_to_speech_conversion(text, lang_code, engine="gtts"):
+def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English"):
     try:
         if engine == "edge_tts" and edge_tts is not None:
-            tts = edge_tts.Communicate(text, lang=lang_code)
+            voice_name = EDGE_TTS_VOICE_DICT.get(lang_name, "en-US-AriaNeural")
+            communicate = edge_tts.Communicate(text, voice_name)
             audio_bytes = b""
-            for chunk in tts.stream():
+            for chunk in communicate.stream():
                 audio_bytes += chunk
             return io.BytesIO(audio_bytes)
         elif engine == "gtts" and gTTS is not None:
@@ -218,7 +237,7 @@ def text_to_speech_conversion(text, lang_code, engine="gtts"):
             mp3_fp.seek(0)
             return mp3_fp
         else:
-            st.warning("No TTS engine available.")
+            st.warning("No TTS engine available for audio playback.")
             return None
     except Exception as e:
         st.warning(f"TTS Error: Could not generate speech with code '{lang_code}'. Try a different voice. Details: {e}")
@@ -356,9 +375,12 @@ with col_output:
                 response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT)
             st.markdown(response_text)
             if st.session_state.tts_enabled:
-                lang_code = LANGUAGE_DICT.get(st.session_state.tts_language, "en")
+                lang_name = st.session_state.tts_language
+                lang_code = LANGUAGE_DICT.get(lang_name, "en")
                 tts_engine = st.session_state.tts_engine
-                audio_data = text_to_speech_conversion(response_text, lang_code, engine=tts_engine)
+                audio_data = text_to_speech_conversion(
+                    response_text, lang_code, engine=tts_engine, lang_name=lang_name
+                )
                 if audio_data:
                     st.audio(audio_data, format="audio/mp3", autoplay=True)
             st.session_state.messages.append({"role": "assistant", "content": response_text})
