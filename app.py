@@ -1,16 +1,31 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import json
+import os # For environment variables
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-import json
+from google import genai # For Gemini API
+
+# --- 0. LLM CONFIGURATION ---
+
+def setup_llm():
+    """Initializes the Gemini client."""
+    # Assumes GEMINI_API_KEY is set in environment variables (or Streamlit secrets)
+    try:
+        if 'GEMINI_API_KEY' not in os.environ:
+             st.error("🔑 Error: GEMINI_API_KEY environment variable not found. Please set it up in Streamlit secrets.")
+             return None
+        return genai.Client()
+    except Exception as e:
+        st.error(f"Failed to initialize Gemini Client: {e}")
+        return None
 
 # --- 1. CONFIGURATION AND INITIALIZATION ---
 
 @st.cache_resource
 def load_model():
     """Load the Sentence Transformer model (cached for performance)."""
-    # Using a fast, lightweight model for demonstration
     return SentenceTransformer('all-MiniLM-L6-v2')
 
 @st.cache_data
@@ -19,7 +34,7 @@ def load_data():
     try:
         courses_df = pd.read_csv('courses.csv')
     except FileNotFoundError:
-        st.error("Error: 'courses.csv' not found. Please create the file.")
+        st.error("Error: 'courses.csv' not found. Please create the file with the required columns.")
         st.stop()
         
     model = load_model()
@@ -56,44 +71,50 @@ def map_course_level(level_str):
     mapping = {'Beginner': 1, 'Intermediate': 2, 'Advanced': 3}
     return mapping.get(level_str.strip(), 0)
 
-def determine_recommended_prep(user_skills, course_prerequisites):
-    """Simple check to suggest preparation."""
-    # Placeholder for more complex NLP-based prep check
-    if course_prerequisites.lower() != 'none':
-        return f"Prep: Ensure you have strong foundation in **{course_prerequisites}**."
-    return ""
+def generate_llm_rationale(client, user_profile, course_row, timeline_type):
+    """Generates the justification text using the Gemini LLM."""
+    if not client:
+        return f"LLM Rationale Unavailable. Heuristic: Good fit for {course_row['level']} level. It is a {timeline_type} step."
 
-def generate_rationale_and_gap(user_profile, course_row):
-    """Generates the justification text using a simple prompt-like structure."""
-    
-    # Ensure all strings are lowercase lists for comparison
-    user_skills = [s.strip() for s in user_profile['technical_skills'].lower().split(',')]
-    course_skills = [s.strip() for s in course_row['skill_tags'].lower().split(',')]
-    target_domain = user_profile['target_domain']
-    
-    # 1. Matching
-    matched_skills = [s.capitalize() for s in user_skills if s in course_skills and s]
-    match_str = f"This course aligns with your current skills in **{', '.join(matched_skills[:2])}**." if matched_skills else ""
-    
-    # 2. Gap Filling (what new skill does it offer)
-    new_skills = [s.capitalize() for s in course_skills if s not in user_skills and s]
-    gap_str = f"It will fill the gap by teaching you **{', '.join(new_skills[:2])}** needed for a role in **{target_domain}**."
-    
-    # 3. Preparation
-    # Need to handle potential NaN in prereqs before passing to function
-    prereqs = str(course_row['prerequisites']) if not pd.isna(course_row['prerequisites']) else 'None'
-    prep_str = determine_recommended_prep(user_profile['technical_skills'], prereqs)
-    
-    return f"{match_str} {gap_str} {prep_str}".strip()
+    prompt = f"""
+    Act as a highly experienced Career Counselor. Given the user profile and the recommended course,
+    provide a **concise, two-sentence rationale** (less than 40 words total).
 
-def recommend_courses(user_profile, courses_df, course_embeddings, model):
+    ---
+    User Profile:
+    - Education: {user_profile['education_level']} in {user_profile['major']}
+    - Skills: {user_profile['technical_skills']}
+    - Goal: Career switch/growth into {user_profile['target_domain']}
+
+    Course Recommended:
+    - Title: {course_row['title']} by {course_row['provider']}
+    - Level: {course_row['level']} ({timeline_type} plan)
+    - Key Skills Taught: {course_row['skill_tags']}
+    - Prerequisites: {course_row['prerequisites']}
+    ---
+
+    Sentence 1 (Matching): Explain which existing user skills connect to the course content.
+    Sentence 2 (Gap/Next Step): Explain what new, specific skill or knowledge gap this course fills for the user's target domain.
+    """
+    
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash', 
+            contents=prompt,
+            config={"temperature": 0.3}
+        )
+        return response.text.strip().replace('\n', ' ')
+    except Exception as e:
+        return f"Error generating LLM rationale: {e}"
+
+
+def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_client):
     """Main function to compute similarity, rank, and filter courses."""
     
     # 1. Get user embedding
     user_embed = generate_user_embedding(user_profile, model)
     
     # 2. Calculate Cosine Similarity
-    # Similarity score is between 0 and 1
     similarity_scores = cosine_similarity(user_embed, course_embeddings)[0]
     
     results_df = courses_df.copy()
@@ -110,15 +131,12 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model):
         
     results_df['course_level_num'] = results_df['level'].apply(map_course_level)
     
-    # *** CORRECTION APPLIED HERE (Line 112) ***
-    # Handle NaN values in 'prerequisites' to avoid AttributeError
+    # CORRECTION APPLIED HERE (Handling NaN in prerequisites)
     results_df['prereq_level_num'] = results_df['prerequisites'].apply(
         lambda x: 0 if pd.isna(x) else map_prerequisite_level(str(x).split(',')[0].strip())
     )
-    # ******************************************
 
     # Penalty for recommending too-advanced courses:
-    # If course prerequisite level is higher than user's heuristic level, significantly penalize score
     results_df['prereq_penalty'] = np.where(
         results_df['prereq_level_num'] > user_level, 0.5, 1.0 
     )
@@ -127,30 +145,26 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model):
     results_df['fit_score'] = (results_df['similarity_score'] * 100 * results_df['prereq_penalty']).round(1)
     
     # 4. Rank and Filter
-    ranked_courses = results_df.sort_values(by='fit_score', ascending=False).head(10)
+    ranked_courses = results_df.sort_values(by='fit_score', ascending=False).head(10).copy()
     
-    # 5. Generate Rationale and Timeline
-    # Ensure rationale generation is robust to missing data
-    ranked_courses['rationale'] = ranked_courses.apply(
-        lambda row: generate_rationale_and_gap(user_profile, row), axis=1
-    )
-    
-    # Simple Timeline Logic: 
+    # 5. Generate Timeline
     def assign_timeline(row):
         is_basic = row['level'] in ['Beginner', 'Intermediate']
-        # Check if duration contains 'week' or is 'month' up to 2
         duration_lower = row['duration'].lower()
         is_short = 'week' in duration_lower or ('month' in duration_lower and int(duration_lower.split()[0]) <= 2)
         
-        # Priority: Basic/Short courses with good fit score
         if is_basic and is_short and row['fit_score'] >= 50:
             return 'Short-Term'
-        # Secondary: More advanced or longer courses
         elif row['fit_score'] >= 40:
             return 'Long-Term'
-        return 'Long-Term' # Default
+        return 'Long-Term'
         
     ranked_courses['timeline'] = ranked_courses.apply(assign_timeline, axis=1)
+
+    # 6. Generate LLM Rationale
+    ranked_courses['rationale'] = ranked_courses.apply(
+        lambda row: generate_llm_rationale(llm_client, user_profile, row, row['timeline']), axis=1
+    )
 
     return ranked_courses
 
@@ -160,14 +174,12 @@ def format_json_output(df, profile_name):
     short_term_courses = df[df['timeline'] == 'Short-Term'].to_dict('records')
     long_term_courses = df[df['timeline'] == 'Long-Term'].to_dict('records')
 
-    # Convert object to string/float for JSON serialization
     def serialize_record(record):
         return {
             'title': record['title'],
             'provider': record['provider'],
             'duration': record['duration'],
             'level': record['level'],
-            # Ensure fit_score is a Python float before JSON serialization
             'fit_score': float(record['fit_score']), 
             'rationale': record['rationale'],
             'link': record['link']
@@ -203,8 +215,9 @@ A smart recommender that suggests suitable college programs, certifications, or 
 try:
     COURSES_DF, COURSE_EMBEDDINGS = load_data()
     MODEL = load_model()
+    LLM_CLIENT = setup_llm() # Initialize Gemini Client
 except Exception as e:
-    st.error(f"Could not load data or model: {e}. Please check your `requirements.txt` and `courses.csv`.")
+    st.error(f"Could not load data or model: {e}. Check dependencies.")
     st.stop()
 
 # Load sample profiles
@@ -213,7 +226,7 @@ try:
         SAMPLE_PROFILES = json.load(f)
 except FileNotFoundError:
     SAMPLE_PROFILES = {}
-    st.warning("Could not find 'profiles.json'. Please manually input data.")
+    st.warning("Could not find 'profiles.json'. Using manual input only.")
 
 
 # --- SIDEBAR (USER INPUT) ---
@@ -267,10 +280,18 @@ with st.sidebar:
     )
     
     duration_options = ["Short-term (1-3 months)", "Long-term (3-12 months)", "Any"]
+    loaded_duration = loaded_profile.get('preferred_duration', "Any")
+    
+    # FIX FOR VALUE ERROR: Find the index of the option containing the loaded value
+    duration_index = next(
+        (i for i, opt in enumerate(duration_options) if loaded_duration in opt), 
+        duration_options.index("Any") # Default to "Any" if not found
+    )
+    
     preferred_duration = st.selectbox(
         "Preferred Study Duration:",
         duration_options,
-        index=duration_options.index(loaded_profile.get('preferred_duration', "Any"))
+        index=duration_index # Use the safely determined index
     )
     
     # Final User Profile Dict
@@ -280,7 +301,7 @@ with st.sidebar:
         'technical_skills': technical_skills,
         'soft_skills': soft_skills,
         'target_domain': target_domain,
-        'preferred_duration': preferred_duration,
+        'preferred_duration': preferred_duration, # Now uses the full string option
     }
 
     st.markdown("---")
@@ -295,17 +316,18 @@ if st.button("🚀 Generate Recommendations", type="primary"):
         st.error("Please provide at least your Technical Skills and Target Career Domain.")
         st.stop()
         
-    with st.spinner("Analyzing profile and computing similarity..."):
+    with st.spinner("Analyzing profile, computing similarity, and generating LLM rationale..."):
         # Run the matching engine
         recommendations_df = recommend_courses(
             USER_PROFILE, 
             COURSES_DF, 
             COURSE_EMBEDDINGS, 
-            MODEL
+            MODEL,
+            LLM_CLIENT # Pass the Gemini client
         )
     
     st.header(f"🎯 Recommended Learning Path for **{target_domain}**")
-    st.write(f"**Current Technical Skills:** {USER_PROFILE['technical_skills']}")
+    st.markdown(f"**Current Technical Skills:** {USER_PROFILE['technical_skills']}")
     
     
     # --- SHORT-TERM PLAN ---
