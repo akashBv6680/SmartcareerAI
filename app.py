@@ -102,16 +102,37 @@ def generate_user_embedding(user_profile, model):
     return model.encode([profile_text])[0].reshape(1, -1)
 
 def map_prerequisite_level(level_str):
-    """Maps level string to a numerical value for comparison."""
-    if pd.isna(level_str): return 0
-    mapping = {'None': 0, 'Basic': 1, 'Beginner': 1, 'Intermediate': 2, 'Advanced': 3}
-    return mapping.get(level_str.strip(), 0)
+    """Maps level string to a numerical value for comparison (FIXED)."""
+    # Use lowercase keys for robust matching
+    mapping = {'none': 0, 'basic': 1, 'beginner': 1, 'intermediate': 2, 'advanced': 3}
+    
+    # Safely handle NaN and convert to lower-case string before strip
+    if pd.isna(level_str): 
+        return 0
+        
+    cleaned_level = str(level_str).strip().lower()
+    
+    return mapping.get(cleaned_level, 0)
 
 def map_course_level(level_str):
-    """Maps course level to a numerical value."""
-    mapping = {'Beginner': 1, 'Intermediate': 2, 'Advanced': 3}
-    return mapping.get(level_str.strip(), 0)
+    """Maps course level to a numerical value (FIXED to handle NaNs and mixed levels)."""
+    # Use lowercase keys for robust matching
+    mapping = {'beginner': 1, 'intermediate': 2, 'advanced': 3}
+    
+    # 1. Safely handle NaN (which is a float)
+    if pd.isna(level_str): 
+        return 0
+    
+    # 2. Convert to string, strip whitespace, and convert to lowercase
+    cleaned_level = str(level_str).strip().lower()
 
+    # 3. Handle combined levels like "beginner/intermediate" by taking the first part
+    if '/' in cleaned_level:
+        cleaned_level = cleaned_level.split('/')[0]
+
+    # Use the lowercase mapping
+    return mapping.get(cleaned_level, 0)
+    
 def generate_llm_rationale(client, user_profile, course_row, timeline_type):
     """Generates the justification text using the Gemini LLM."""
     if not client:
@@ -148,6 +169,7 @@ def generate_llm_rationale(client, user_profile, course_row, timeline_type):
     except Exception as e:
         return f"Error generating LLM rationale: {e}"
 
+
 def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_client):
     """Main function to compute similarity, rank, and filter courses."""
     
@@ -157,10 +179,13 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
     results_df = courses_df.copy()
     results_df['similarity_score'] = similarity_scores
     
-    user_level = 1
-    if 'intermediate' in user_profile['technical_skills'].lower() or user_profile['education_level'] in ['master\'s', 'phd']:
+    # 3. Prerequisite and Level Matching Logic (Filtering/Penalty)
+    
+    # Heuristic for user's starting level
+    user_level = 1 # Beginner
+    if 'intermediate' in user_profile['technical_skills'].lower() or user_profile['education_level'] in ['Master\'s', 'PhD']:
         user_level = 2
-    if 'advanced' in user_profile['technical_skills'].lower() or user_profile['education_level'] == 'phd':
+    if 'advanced' in user_profile['technical_skills'].lower() or user_profile['education_level'] == 'PhD':
         user_level = 3
         
     results_df['course_level_num'] = results_df['level'].apply(map_course_level)
@@ -170,17 +195,21 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
         lambda x: 0 if pd.isna(x) else map_prerequisite_level(str(x).split(',')[0].strip())
     )
 
+    # Penalty for recommending too-advanced courses:
     results_df['prereq_penalty'] = np.where(
         results_df['prereq_level_num'] > user_level, 0.5, 1.0 
     )
     
+    # Final Fit Score (0-100)
     results_df['fit_score'] = (results_df['similarity_score'] * 100 * results_df['prereq_penalty']).round(1)
     
+    # 4. Rank and Filter
     ranked_courses = results_df.sort_values(by='fit_score', ascending=False).head(10).copy()
     
+    # 5. Generate Timeline
     def assign_timeline(row):
         is_basic = row['level'] in ['Beginner', 'Intermediate']
-        duration_lower = str(row['duration']).lower()
+        duration_lower = str(row['duration']).lower() # Ensure string conversion
         is_short = 'week' in duration_lower or ('month' in duration_lower and int(duration_lower.split()[0]) <= 2)
         
         if is_basic and is_short and row['fit_score'] >= 50:
@@ -191,11 +220,13 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
         
     ranked_courses['timeline'] = ranked_courses.apply(assign_timeline, axis=1)
 
+    # 6. Generate LLM Rationale
     ranked_courses['rationale'] = ranked_courses.apply(
         lambda row: generate_llm_rationale(llm_client, user_profile, row, row['timeline']), axis=1
     )
 
     return ranked_courses
+
 
 # --- 2. RAG CHATBOT LOGIC ---
 
@@ -203,8 +234,10 @@ def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
     """Retrieves the most relevant course data using vector search."""
     query_embed = model.encode([query])[0].reshape(1, -1)
     
+    # Calculate cosine similarity between query and all course embeddings
     similarity_scores = cosine_similarity(query_embed, course_embeddings)[0]
     
+    # Get top K indices
     top_indices = np.argsort(similarity_scores)[::-1][:top_k]
     
     context = ""
@@ -285,7 +318,7 @@ except Exception as e:
     st.stop()
 
 
-# Load sample profiles
+# Load sample profiles (assuming a profiles.json file exists)
 try:
     with open('profiles.json', 'r') as f:
         SAMPLE_PROFILES = json.load(f)
