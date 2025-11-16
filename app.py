@@ -99,7 +99,7 @@ def load_data():
 
 def generate_user_embedding(user_profile, model):
     """
-    FIX: Prioritizes the Target Career Domain (Goal) by repeating it 
+    FIX (Goal Prioritization): Prioritizes the Target Career Domain (Goal) by repeating it 
     multiple times to force the vector embedding to align with the goal.
     """
     goal = user_profile['target_domain']
@@ -246,30 +246,55 @@ def run_rag_query(query, courses_df, course_embeddings, model, llm_client):
         return f"Error communicating with the Gemini model: {e}"
 
 def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English"):
+    """
+    FIX (TTS Robustness): Adds explicit checks for empty text and empty audio data
+    in the edge_tts implementation to prevent "No audio was received" errors.
+    """
     try:
+        if not text.strip():
+            raise ValueError("Text to convert is empty.")
+            
         if engine == "edge_tts" and edge_tts is not None:
             voice_name = EDGE_TTS_VOICE_DICT.get(lang_name, "en-US-AriaNeural")
             communicate = edge_tts.Communicate(text, voice_name)
             audio_bytes = b""
-            # Stream the audio to get all chunks
+            
             async def run_tts():
                 nonlocal audio_bytes
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        if chunk["content"]:
-                            audio_bytes += chunk["content"]
+                try:
+                    async for chunk in communicate.stream():
+                        if chunk["type"] == "audio":
+                            if chunk["content"]:
+                                audio_bytes += chunk["content"]
+                        elif chunk["type"] == "error":
+                            # Catch and raise service-side errors
+                            error_msg = chunk.get('content', 'Unknown Edge TTS service error.')
+                            raise RuntimeError(f"Edge TTS service error: {error_msg}")
+                except Exception as e:
+                    # Propagate the error so the outer try/except can catch it
+                    raise e
+
             asyncio.run(run_tts())
+            
+            if not audio_bytes:
+                # Explicitly check for empty audio data
+                raise RuntimeError("Edge TTS returned no audio data.")
+
             return io.BytesIO(audio_bytes)
+        
         elif engine == "gtts" and gTTS is not None:
             tts = gTTS(text=text, lang=lang_code)
             mp3_fp = io.BytesIO()
             tts.write_to_fp(mp3_fp)
             mp3_fp.seek(0)
             return mp3_fp
+        
         else:
-            st.warning("No functional TTS engine available for audio playback.")
+            st.warning("No functional TTS engine available or selected.")
             return None
+            
     except Exception as e:
+        # st.warning will now show the underlying error (e.g., "Edge TTS returned no audio data.")
         st.warning(f"TTS Error: Could not generate speech. Details: {e}")
         return None
 
