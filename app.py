@@ -294,7 +294,7 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
             return None
             
     except Exception as e:
-        # st.warning will now show the underlying error (e.g., "Edge TTS returned no audio data.")
+        # The exception now provides a specific error message thanks to the defensive checks
         st.warning(f"TTS Error: Could not generate speech. Details: {e}")
         return None
 
@@ -459,15 +459,20 @@ with col_output:
             with st.spinner("Searching catalog and thinking..."):
                 response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT)
             st.markdown(response_text)
+            
+            # --- TTS EXECUTION ---
             if st.session_state.tts_enabled and st.session_state.tts_engine != "None":
                 lang_name = st.session_state.tts_language
                 lang_code = LANGUAGE_DICT.get(lang_name, "en")
                 tts_engine = st.session_state.tts_engine
                 
+                # Pass the clean response text to the robust TTS function
                 audio_data = text_to_speech_conversion(
                     response_text, lang_code, engine=tts_engine, lang_name=lang_name
                 )
                 
                 if audio_data:
                     st.audio(audio_data, format="audio/mp3", autoplay=True)
+            # --- END TTS EXECUTION ---
+            
             st.session_state.messages.append({"role": "assistant", "content": response_text})
