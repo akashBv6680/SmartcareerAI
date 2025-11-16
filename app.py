@@ -37,42 +37,41 @@ EDGE_TTS_VOICE_DICT = {
 DEFAULT_LANGUAGE = "English"
 
 # --- MASSIVELY EXPANDED KNOWLEDGE BASE (STATIC COURSE CONTENT) ---
-# This static text is the full course catalog, replacing any health-related content.
 KNOWLEDGE_BASE_TEXT = """
-TitleProviderDurationPrerequisitesSkill TagsLevelLink
-Python Crash CourseCoursera (Google)4 WeeksNonePython, Basics, Programming, Data TypesBeginnerhttps://www.coursera.org/learn/python-crash-course
-Data Science FundamentalsedX6 WeeksBasic Math, AlgebraData Science, Statistics, R, VisualizationBeginnerhttps://www.edx.org/learn/data-science
-Machine Learning SpecializationCoursera (Stanford/DeepLearning.AI)5 MonthsCalculus, Python, Linear AlgebraMachine Learning, Algorithms, Neural Networks, Deep LearningAdvancedhttps://www.coursera.org/specializations/machine-learning-introduction
-Agile Project ManagementPMI8 WeeksNoneAgile, Scrum, Project Management, CommunicationIntermediatehttps://www.pmi.org/certifications/agile-acp
-Cloud Computing with AWSAWS Training10 WeeksBasic NetworkingAWS, Cloud, Infrastructure, Networking, DevOpsIntermediatehttps://aws.amazon.com/training/
-Effective CommunicationLinkedIn Learning2 WeeksNoneCommunication, Presentation, Leadership, Soft SkillsBeginnerhttps://www.linkedin.com/learning/topics/communication
-Advanced SQL and Database DesignUdemy6 WeeksBasic SQLSQL, Database, Normalization, Query OptimizationIntermediatehttps://www.udemy.com/topic/sql/
-Introduction to Web DevelopmentFreeCodeCamp3 MonthsNoneHTML, CSS, JavaScript, Web DevBeginnerhttps://www.freecodecamp.org/learn
-TensorFlow Developer CertificateDeepLearning.AI (Google)4 MonthsAdvanced Python, ML FundamentalsTensorFlow, Deep Learning, Neural Networks, Computer VisionAdvancedhttps://www.deeplearning.ai/courses/tensorflow-developer-professional-certificate/
-SAP MM Certification CourseFinprov Learning2 MonthsNoneSAP MM, Materials Management, Procurement, InventoryBeginner/Intermediatehttps://finprov.com/course/sap-mm-certification-course/
-SAP MM Online TrainingBesant Technologies1 MonthNoneSAP MM, Purchase Order, Invoice Verification, Stock ManagementBeginner/Intermediatehttps://www.besanttechnologies.com/training-courses/sap-courses/sap-mm-training
-SAP Professional FundamentalsCoursera4 WeeksNoneSAP Ecosystem, Business Processes, ERP FundamentalsBeginnerhttps://www.coursera.org/learn/sap-professional-fundamentals
-Introduction to SAPAlison4-5 HoursNoneSAP Navigation, Core Transactions, ERP BasicsBeginnerhttps://alison.com/course/an-introduction-to-sap
-Data Engineering on Google CloudGoogle Cloud Training3 MonthsPython, SQLBigQuery, Data Pipelines, Apache Beam, Cloud StorageIntermediatehttps://cloud.google.com/training/data-engineering-and-analytics
-Full Stack Web DevelopmentUdacity4 MonthsBasic HTML/CSSReact, Node.js, APIs, Databases, Frontend/BackendIntermediatehttps://www.udacity.com/course/full-stack-web-developer-nanodegree--nd0044
-Power BI Data AnalyticsMicrosoft Learn6 WeeksBasic ExcelPower BI, DAX, Data Visualization, Business IntelligenceBeginnerhttps://learn.microsoft.com/en-us/training/powerplatform/power-bi
-Tableau Desktop SpecialistTableau/Salesforce5 WeeksNoneTableau, Data Visualization, Dashboard Design, AnalyticsBeginnerhttps://www.tableau.com/learn/training
-AI For EveryoneCoursera (DeepLearning.AI)4 WeeksNoneAI Strategy, Machine Learning Basics, AI ApplicationsBeginnerhttps://www.coursera.org/learn/ai-for-everyone
-Generative AI with LLMsCoursera (DeepLearning.AI)3 MonthsPython, ML BasicsLLMs, Prompt Engineering, GPT, Generative AI, Fine-tuningIntermediatehttps://www.coursera.org/learn/generative-ai-with-llms
-Docker and KubernetesUdemy8 WeeksBasic LinuxDocker, Kubernetes, Containers, DevOps, MicroservicesIntermediatehttps://www.udemy.com/topic/docker/
-Cybersecurity FundamentalsCoursera (IBM)3 MonthsNoneCybersecurity, Network Security, Threat Analysis, EncryptionBeginnerhttps://www.coursera.org/professional-certificates/ibm-cybersecurity-analyst
-Azure Data FundamentalsMicrosoft Learn6 WeeksNoneAzure, Data Storage, SQL, NoSQL, Data AnalyticsBeginnerhttps://learn.microsoft.com/en-us/certifications/azure-data-fundamentals/
-Java Programming MasterclassUdemy12 WeeksNoneJava, OOP, Spring Boot, Multithreading, Data StructuresBeginnerhttps://www.udemy.com/course/java-the-complete-java-developer-course/
-Natural Language ProcessingCoursera (DeepLearning.AI)4 MonthsPython, Deep LearningNLP, Transformers, BERT, Text Processing, Sentiment AnalysisAdvancedhttps://www.coursera.org/specializations/natural-language-processing
-Blockchain BasicsCoursera (University at Buffalo)4 WeeksNoneBlockchain, Cryptocurrency, Smart Contracts, Distributed SystemsBeginnerhttps://www.coursera.org/learn/blockchain-basics
-PySpark for Big DataUdemy6 WeeksPython, Spark BasicsPySpark, Big Data, Spark SQL, Data Processing, ETLIntermediatehttps://www.udemy.com/topic/apache-spark/
-Git and GitHub EssentialsUdemy3 WeeksNoneGit, GitHub, Version Control, Collaboration, CI/CDBeginnerhttps://www.udemy.com/topic/git/
-MLOps SpecializationCoursera (DeepLearning.AI)4 MonthsML Fundamentals, PythonMLOps, Model Deployment, CI/CD, Model MonitoringAdvancedhttps://www.coursera.org/specializations/machine-learning-engineering-for-production-mlops
-Excel to Power Query and Power PivotUdemy5 WeeksBasic ExcelExcel, Power Query, Power Pivot, Data ModelingIntermediatehttps://www.udemy.com/topic/microsoft-power-query/
-SAP FICO TrainingSLA Consultants2 MonthsNoneSAP FICO, Financial Accounting, Controlling, SAP ERPBeginner/Intermediatehttps://www.slaconsultantsindia.com/sap-fico-training
-Deep Learning SpecializationCoursera (DeepLearning.AI)5 MonthsPython, ML BasicsDeep Learning, CNNs, RNNs, Neural Networks, Hyperparameter TuningAdvancedhttps://www.coursera.org/specializations/deep-learning
-React - The Complete GuideUdemy10 WeeksJavaScript BasicsReact, Redux, Hooks, Context API, Frontend DevelopmentIntermediatehttps://www.udemy.com/course/react-the-complete-guide-incl-redux/
-Statistics for Data ScienceCoursera (Stanford)6 WeeksBasic MathStatistics, Probability, Hypothesis Testing, RegressionBeginnerhttps://www.coursera.org/learn/stanford-statistics
+Title,Provider,Duration,Prerequisites,Skill Tags,Level,Link
+Python Crash Course,Coursera (Google),4 Weeks,None,"Python, Basics, Programming, Data Types",Beginner,https://www.coursera.org/learn/python-crash-course
+Data Science Fundamentals,edX,6 Weeks,"Basic Math, Algebra","Data Science, Statistics, R, Visualization",Beginner,https://www.edx.org/learn/data-science
+Machine Learning Specialization,Coursera (Stanford/DeepLearning.AI),5 Months,"Calculus, Python, Linear Algebra","Machine Learning, Algorithms, Neural Networks, Deep Learning",Advanced,https://www.coursera.org/specializations/machine-learning-introduction
+Agile Project Management,PMI,8 Weeks,None,"Agile, Scrum, Project Management, Communication",Intermediate,https://www.pmi.org/certifications/agile-acp
+Cloud Computing with AWS,AWS Training,10 Weeks,Basic Networking,"AWS, Cloud, Infrastructure, Networking, DevOps",Intermediate,https://aws.amazon.com/training/
+Effective Communication,LinkedIn Learning,2 Weeks,None,"Communication, Presentation, Leadership, Soft Skills",Beginner,https://www.linkedin.com/learning/topics/communication
+Advanced SQL and Database Design,Udemy,6 Weeks,Basic SQL,"SQL, Database, Normalization, Query Optimization",Intermediate,https://www.udemy.com/topic/sql/
+Introduction to Web Development,FreeCodeCamp,3 Months,None,"HTML, CSS, JavaScript, Web Dev",Beginner,https://www.freecodecamp.org/learn
+TensorFlow Developer Certificate,DeepLearning.AI (Google),4 Months,"Advanced Python, ML Fundamentals","TensorFlow, Deep Learning, Neural Networks, Computer Vision",Advanced,https://www.deeplearning.ai/courses/tensorflow-developer-professional-certificate/
+SAP MM Certification Course,Finprov Learning,2 Months,None,"SAP MM, Materials Management, Procurement, Inventory",Beginner/Intermediate,https://finprov.com/course/sap-mm-certification-course/
+SAP MM Online Training,Besant Technologies,1 Month,None,"SAP MM, Purchase Order, Invoice Verification, Stock Management",Beginner/Intermediate,https://www.besanttechnologies.com/training-courses/sap-courses/sap-mm-training
+SAP Professional Fundamentals,Coursera,4 Weeks,None,"SAP Ecosystem, Business Processes, ERP Fundamentals",Beginner,https://www.coursera.org/learn/sap-professional-fundamentals
+Introduction to SAP,Alison,4-5 Hours,None,"SAP Navigation, Core Transactions, ERP Basics",Beginner,https://alison.com/course/an-introduction-to-sap
+Data Engineering on Google Cloud,Google Cloud Training,3 Months,"Python, SQL","BigQuery, Data Pipelines, Apache Beam, Cloud Storage",Intermediate,https://cloud.google.com/training/data-engineering-and-analytics
+Full Stack Web Development,Udacity,4 Months,Basic HTML/CSS,"React, Node.js, APIs, Databases, Frontend/Backend",Intermediate,https://www.udacity.com/course/full-stack-web-developer-nanodegree--nd0044
+Power BI Data Analytics,Microsoft Learn,6 Weeks,Basic Excel,"Power BI, DAX, Data Visualization, Business Intelligence",Beginner,https://learn.microsoft.com/en-us/training/powerplatform/power-bi
+Tableau Desktop Specialist,Tableau/Salesforce,5 Weeks,None,"Tableau, Data Visualization, Dashboard Design, Analytics",Beginner,https://www.tableau.com/learn/training
+AI For Everyone,Coursera (DeepLearning.AI),4 Weeks,None,"AI Strategy, Machine Learning Basics, AI Applications",Beginner,https://www.coursera.org/learn/ai-for-everyone
+Generative AI with LLMs,Coursera (DeepLearning.AI),3 Months,"Python, ML Basics","LLMs, Prompt Engineering, GPT, Generative AI, Fine-tuning",Intermediate,https://www.coursera.org/learn/generative-ai-with-llms
+Docker and Kubernetes,Udemy,8 Weeks,Basic Linux,"Docker, Kubernetes, Containers, DevOps, Microservices",Intermediate,https://www.udemy.com/topic/docker/
+Cybersecurity Fundamentals,Coursera (IBM),3 Months,None,"Cybersecurity, Network Security, Threat Analysis, Encryption",Beginner,https://www.coursera.org/professional-certificates/ibm-cybersecurity-analyst
+Azure Data Fundamentals,Microsoft Learn,6 Weeks,None,"Azure, Data Storage, SQL, NoSQL, Data Analytics",Beginner,https://learn.microsoft.com/en-us/certifications/azure-data-fundamentals/
+Java Programming Masterclass,Udemy,12 Weeks,None,"Java, OOP, Spring Boot, Multithreading, Data Structures",Beginner,https://www.udemy.com/course/java-the-complete-java-developer-course/
+Natural Language Processing,Coursera (DeepLearning.AI),4 Months,"Python, Deep Learning","NLP, Transformers, BERT, Text Processing, Sentiment Analysis",Advanced,https://www.coursera.org/specializations/natural-language-processing
+Blockchain Basics,Coursera (University at Buffalo),4 Weeks,None,"Blockchain, Cryptocurrency, Smart Contracts, Distributed Systems",Beginner,https://www.coursera.org/learn/blockchain-basics
+PySpark for Big Data,Udemy,6 Weeks,"Python, Spark Basics","PySpark, Big Data, Spark SQL, Data Processing, ETL",Intermediate,https://www.udemy.com/topic/apache-spark/
+Git and GitHub Essentials,Udemy,3 Weeks,None,"Git, GitHub, Version Control, Collaboration, CI/CD",Beginner,https://www.udemy.com/topic/git/
+MLOps Specialization,Coursera (DeepLearning.AI),4 Months,"ML Fundamentals, Python","MLOps, Model Deployment, CI/CD, Model Monitoring",Advanced,https://www.coursera.org/specializations/machine-learning-engineering-for-production-mlops
+Excel to Power Query and Power Pivot,Udemy,5 Weeks,Basic Excel,"Excel, Power Query, Power Pivot, Data Modeling",Intermediate,https://www.udemy.com/topic/microsoft-power-query/
+SAP FICO Training,SLA Consultants,2 Months,None,"SAP FICO, Financial Accounting, Controlling, SAP ERP",Beginner/Intermediate,https://www.slaconsultantsindia.com/sap-fico-training
+Deep Learning Specialization,Coursera (DeepLearning.AI),5 Months,"Python, ML Basics","Deep Learning, CNNs, RNNs, Neural Networks, Hyperparameter Tuning",Advanced,https://www.coursera.org/specializations/deep-learning
+React - The Complete Guide,Udemy,10 Weeks,JavaScript Basics,"React, Redux, Hooks, Context API, Frontend Development",Intermediate,https://www.udemy.com/course/react-the-complete-guide-incl-redux/
+Statistics for Data Science,Coursera (Stanford),6 Weeks,Basic Math,"Statistics, Probability, Hypothesis Testing, Regression",Beginner,https://www.coursera.org/learn/stanford-statistics
 """
 
 # --- LLM SETUP AND DATA LOADING ---
@@ -95,8 +94,6 @@ def load_model():
 def load_data():
     """
     Loads data ONLY from the local courses.csv file for vector embeddings.
-    Raises exception if file not found or other issues.
-    (Streamlit element calls removed for cache stability)
     """
     # Load courses only from the local file
     courses_df = pd.read_csv('courses.csv')
@@ -248,33 +245,34 @@ def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
 
 def run_rag_query(query, courses_df, course_embeddings, model, llm_client, static_kb_text):
     """
-    RAG Query function that uses both dynamic course search (from CSV) and static text KB (from prompt).
+    RAG Query function that explicitly models the agent as having two tools:
+    1. Course Catalog (retrieved context)
+    2. General LLM Knowledge
     """
     if not llm_client:
         return "The AI Agent is not initialized. Please ensure the Gemini API key is set."
-    if courses_df is None or course_embeddings is None:
-        return "The course knowledge base is unavailable due to a loading error."
-        
+    
     # 1. Dynamic Course Retrieval (Vector Search)
     course_context_vector = get_rag_context(query, courses_df, course_embeddings, model)
     
     # 2. Combine all knowledge sources for the LLM
+    # The LLM is instructed to use the most relevant "tool" (context or general knowledge)
     full_context = f"""
-    --- COURSE CATALOG (Vector Search Results) ---
+    --- TOOL 1: Course Catalog (Retrieved Document Context via Vector Search) ---
     {course_context_vector}
     
-    --- COURSE CATALOG (Static Text KB for Backup/Cross-reference) ---
+    --- TOOL 2: General LLM Knowledge (Static KB for Cross-reference) ---
     {static_kb_text}
     """
     
     rag_prompt = f"""
-    You are the **PersonalAI Course Consultant** chatbot. Your goal is to answer questions about courses based *only* on the provided context (the Course Catalog). 
+    You are the **PersonalAI Course Consultant** chatbot. You have access to two tools: the **Course Catalog** (provided below as context) and your **General Knowledge**.
     
-    When answering, summarize the course details, including the title, provider, duration, level, and prerequisites. Always provide the course link.
-    If context does not contain the answer, state that you cannot find the information in the current catalog.
+    * **If the query is about a specific course, price, duration, link, or prerequisite, use TOOL 1 (the Course Catalog).** Summarize the details (title, provider, level, link) based ONLY on the catalog content. If the information is not in the catalog, state that.
+    * **If the query is for a general definition, concept explanation (e.g., 'What is Docker?'), or soft skill advice, use TOOL 2 (your General Knowledge).** Do not use the Course Catalog for these general questions.
 
     User Query: "{query}"
-    Context: {full_context}
+    Context (TOOL 1): {full_context}
     """
     try:
         response = llm_client.models.generate_content(
@@ -385,7 +383,7 @@ with col_input:
     st.subheader("Required Background")
     education_options = ["Bachelor's", "Master's", "PhD", "High School/GED", "Certificate"]
     
-    # FIX APPLIED HERE: Reformatted the st.selectbox call to prevent SyntaxError
+    # Fix for previous SyntaxError: Reformatted the st.selectbox call
     education_level = st.selectbox(
         "Education Level:", 
         education_options, 
@@ -506,7 +504,7 @@ with col_output:
             st.markdown(message["content"])
             
     if COURSES_DF is not None and LLM_CLIENT is not None:
-        if prompt := st.chat_input("Ask a question about the courses in the catalog..."):
+        if prompt := st.chat_input("Ask a question about the courses in the catalog or a general tech concept..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
