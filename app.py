@@ -37,7 +37,7 @@ EDGE_TTS_VOICE_DICT = {
 DEFAULT_LANGUAGE = "English"
 
 # --- MASSIVELY EXPANDED KNOWLEDGE BASE (STATIC COURSE CONTENT) ---
-# This static text is now the full course catalog, as explicitly requested by the user.
+# This static text is the full course catalog, replacing any health-related content.
 KNOWLEDGE_BASE_TEXT = """
 TitleProviderDurationPrerequisitesSkill TagsLevelLink
 Python Crash CourseCoursera (Google)4 WeeksNonePython, Basics, Programming, Data TypesBeginnerhttps://www.coursera.org/learn/python-crash-course
@@ -96,6 +96,7 @@ def load_data():
     """
     Loads data ONLY from the local courses.csv file for vector embeddings.
     Raises exception if file not found or other issues.
+    (Streamlit element calls removed for cache stability)
     """
     # Load courses only from the local file
     courses_df = pd.read_csv('courses.csv')
@@ -347,7 +348,7 @@ if "recommendations_df" not in st.session_state:
 st.set_page_config(layout="wide", page_title="AI Learning Path Recommender")
 st.title("💡 AI-Powered Personalized Learning Path Recommender")
 
-# --- FIX: Initialize variables before the try block ---
+# --- Initialize variables before the try block (Fix for NameError) ---
 COURSES_DF = None
 COURSE_EMBEDDINGS = None
 MODEL = None
@@ -383,7 +384,16 @@ with col_input:
     loaded_profile = SAMPLE_PROFILES[profile_selection] if profile_selection != "Manual Input" else {}
     st.subheader("Required Background")
     education_options = ["Bachelor's", "Master's", "PhD", "High School/GED", "Certificate"]
-    education_level = st.selectbox("Education Level:", education_options, index=education_options.index(loaded_profile.get('education_level', "Bachelor's')))
+    
+    # FIX APPLIED HERE: Reformatted the st.selectbox call to prevent SyntaxError
+    education_level = st.selectbox(
+        "Education Level:", 
+        education_options, 
+        index=education_options.index(
+            loaded_profile.get('education_level', "Bachelor's")
+        )
+    )
+    
     major = st.text_input("Major/Degree:", value=loaded_profile.get('major', "Computer Science"))
     technical_skills = st.text_area("Technical Skills (comma separated):", value=loaded_profile.get('technical_skills', "Python, SQL, Data Analysis, Excel, Git"))
     soft_skills = st.text_area("Soft Skills (comma separated):", value=loaded_profile.get('soft_skills', "Communication, Leadership, Problem-Solving"))
