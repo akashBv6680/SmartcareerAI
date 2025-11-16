@@ -5,6 +5,7 @@ import json
 import os
 import io
 import asyncio 
+import urllib.parse
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
@@ -21,42 +22,24 @@ except Exception:
 
 # --- CONFIGURATION ---
 LANGUAGE_DICT = {
-    "English": "en",
-    "Spanish": "es",
-    "Arabic": "ar",
-    "French": "fr",
-    "German": "de",
-    "Hindi": "hi",
-    "Tamil": "ta",
-    "Bengali": "bn",
-    "Japanese": "ja",
-    "Korean": "ko",
-    "Russian": "ru",
-    "Chinese (Simplified)": "zh-Hans",
-    "Portuguese": "pt",
-    "Italian": "it",
-    "Dutch": "nl",
-    "Turkish": "tr"
+    "English": "en", "Spanish": "es", "Arabic": "ar", "French": "fr", "German": "de", 
+    "Hindi": "hi", "Tamil": "ta", "Bengali": "bn", "Japanese": "ja", "Korean": "ko", 
+    "Russian": "ru", "Chinese (Simplified)": "zh-Hans", "Portuguese": "pt", "Italian": "it", 
+    "Dutch": "nl", "Turkish": "tr"
 }
 EDGE_TTS_VOICE_DICT = {
-    "English": "en-US-AriaNeural",
-    "Spanish": "es-ES-ElviraNeural",
-    "Arabic": "ar-EG-SalmaNeural",
-    "French": "fr-FR-DeniseNeural",
-    "German": "de-DE-KatjaNeural",
-    "Hindi": "hi-IN-SwaraNeural",
-    "Tamil": "ta-IN-PallaviNeural",
-    "Bengali": "bn-IN-TanishaaNeural",
-    "Japanese": "ja-JP-NanamiNeural",
-    "Korean": "ko-KR-SunHiNeural",
-    "Russian": "ru-RU-SvetlanaNeural",
-    "Chinese (Simplified)": "zh-CN-XiaoxiaoNeural",
-    "Portuguese": "pt-PT-FernandaNeural",
-    "Italian": "it-IT-ElsaNeural",
-    "Dutch": "nl-NL-ColetteNeural",
+    "English": "en-US-AriaNeural", "Spanish": "es-ES-ElviraNeural", "Arabic": "ar-EG-SalmaNeural", 
+    "French": "fr-FR-DeniseNeural", "German": "de-DE-KatjaNeural", "Hindi": "hi-IN-SwaraNeural", 
+    "Tamil": "ta-IN-PallaviNeural", "Bengali": "bn-IN-TanishaaNeural", "Japanese": "ja-JP-NanamiNeural", 
+    "Korean": "ko-KR-SunHiNeural", "Russian": "ru-RU-SvetlanaNeural", "Chinese (Simplified)": "zh-CN-XiaoxiaoNeural", 
+    "Portuguese": "pt-PT-FernandaNeural", "Italian": "it-IT-ElsaNeural", "Dutch": "nl-NL-ColetteNeural", 
     "Turkish": "tr-TR-EmelNeural"
 }
 DEFAULT_LANGUAGE = "English"
+
+# URL to fetch data from (Google Sheets CSV export URL)
+# NOTE: Using the 'export?format=csv' endpoint is required to read Sheets content directly via pandas.
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1BxCQ3uk6igdwG79PEeD0SIObK4Wlr0zZUG3hd6BrPsM/gviz/tq?tqx=out:csv&gid=0"
 
 def setup_llm():
     try:
@@ -75,26 +58,60 @@ def load_model():
 
 @st.cache_data
 def load_data():
+    """
+    Loads data from both local courses.csv and the Google Sheet URL, combines them,
+    cleans the columns, and generates embeddings.
+    """
+    all_data = []
+
+    # 1. Load data from local courses.csv
     try:
-        courses_df = pd.read_csv('courses.csv')
+        local_df = pd.read_csv('courses.csv')
+        all_data.append(local_df)
+        st.toast("Loaded local courses.csv.", icon="💾")
     except FileNotFoundError:
-        st.error("Error: 'courses.csv' not found. Please create the file with required columns.")
-        st.stop()
+        st.warning("Warning: 'courses.csv' not found locally. Using Google Sheet data only.")
     except Exception as e:
-        st.error(f"Error loading 'courses.csv': {e}")
+        st.error(f"Error loading local 'courses.csv': {e}")
         st.stop()
-        
+
+    # 2. Load data from Google Sheet URL
+    try:
+        # Use a reliable direct CSV export link
+        sheet_df = pd.read_csv(GOOGLE_SHEET_URL)
+        all_data.append(sheet_df)
+        st.toast("Successfully loaded courses from Google Sheet!", icon="🌐")
+    except Exception as e:
+        st.warning(f"Warning: Could not load data from Google Sheet. Using local data only. Details: {e}")
+
+    if not all_data:
+        st.error("Error: No course data could be loaded from any source.")
+        st.stop()
+
+    # 3. Combine and Clean DataFrames
+    courses_df = pd.concat(all_data, ignore_index=True)
+    
+    # Drop rows where Title is missing (handles empty CSV rows)
+    courses_df = courses_df.dropna(subset=['Title']).reset_index(drop=True)
+    
+    # Clean column names (strip space and lowercase)
     courses_df.columns = courses_df.columns.str.strip().str.lower()
     if 'skill tags' in courses_df.columns:
         courses_df = courses_df.rename(columns={'skill tags': 'skill_tags'})
+        
+    # Drop duplicates across all columns to ensure unique knowledge base entries
+    courses_df = courses_df.drop_duplicates()
+    
     model = load_model()
-    # Including all text fields for embedding relevance calculation
+    # Create search text using cleaned, guaranteed column names
     courses_df['search_text'] = (
         courses_df['title'] + " " + courses_df['skill_tags'] + " " +
         courses_df['provider'] + " " + courses_df['level'] + " " +
         courses_df['prerequisites'] + " " + courses_df['duration']
     ).fillna('')
+    
     course_embeddings = model.encode(courses_df['search_text'].tolist(), show_progress_bar=False)
+    
     return courses_df, course_embeddings
 
 def generate_user_embedding(user_profile, model):
@@ -315,6 +332,7 @@ if "recommendations_df" not in st.session_state:
 st.set_page_config(layout="wide", page_title="AI Learning Path Recommender")
 st.title("💡 AI-Powered Personalized Learning Path Recommender")
 try:
+    # Load data now combines local and Google Sheet data
     COURSES_DF, COURSE_EMBEDDINGS = load_data()
     MODEL = load_model()
     LLM_CLIENT = setup_llm()
@@ -466,7 +484,6 @@ with col_output:
                 lang_code = LANGUAGE_DICT.get(lang_name, "en")
                 tts_engine = st.session_state.tts_engine
                 
-                # Pass the clean response text to the robust TTS function
                 audio_data = text_to_speech_conversion(
                     response_text, lang_code, engine=tts_engine, lang_name=lang_name
                 )
