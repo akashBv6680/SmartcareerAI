@@ -4,6 +4,7 @@ import numpy as np
 import json
 import os
 import io
+import asyncio # Added for edge_tts compatibility
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
@@ -79,6 +80,10 @@ def load_data():
     except FileNotFoundError:
         st.error("Error: 'courses.csv' not found. Please create the file with required columns.")
         st.stop()
+    except Exception as e:
+        st.error(f"Error loading 'courses.csv': {e}")
+        st.stop()
+        
     courses_df.columns = courses_df.columns.str.strip().str.lower()
     if 'skill tags' in courses_df.columns:
         courses_df = courses_df.rename(columns={'skill tags': 'skill_tags'})
@@ -183,6 +188,8 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
             return 'Long-Term'
         return 'Long-Term'
     ranked_courses['timeline'] = ranked_courses.apply(assign_timeline, axis=1)
+    
+    # This is the heavy LLM call, which must only be run once.
     ranked_courses['rationale'] = ranked_courses.apply(
         lambda row: generate_llm_rationale(llm_client, user_profile, row, row['timeline']), axis=1
     )
@@ -196,7 +203,7 @@ def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
     context = ""
     for i in top_indices:
         row = courses_df.iloc[i]
-        # UPDATED: Including the 'Link' field in the context provided to the LLM
+        # UPDATED: The code already had the full fields, including 'link'.
         context += (
             f"Course Title: {row['title']}, Provider: {row['provider']}, "
             f"Level: {row['level']}, Duration: {row['duration']}, "
@@ -233,7 +240,6 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
             communicate = edge_tts.Communicate(text, voice_name)
             audio_bytes = b""
             # Stream the audio to get all chunks
-            import asyncio
             async def run_tts():
                 nonlocal audio_bytes
                 async for chunk in communicate.stream():
@@ -262,8 +268,11 @@ if "tts_enabled" not in st.session_state:
 if "tts_language" not in st.session_state:
     st.session_state.tts_language = DEFAULT_LANGUAGE
 if "tts_engine" not in st.session_state:
-    # Default to gtts if available, otherwise edge_tts (if installed)
     st.session_state.tts_engine = "gtts" if gTTS else ("edge_tts" if edge_tts else "None")
+# FIX: Initialize recommendations DataFrame to avoid re-running expensive LLM calls
+if "recommendations_df" not in st.session_state:
+    st.session_state.recommendations_df = pd.DataFrame()
+
 
 st.set_page_config(layout="wide", page_title="AI Learning Path Recommender")
 st.title("💡 AI-Powered Personalized Learning Path Recommender")
@@ -273,10 +282,18 @@ try:
     LLM_CLIENT = setup_llm()
 except Exception as e:
     st.error(f"Could not initialize system components: {e}.")
+
+# FIX: Broaden try-except block to catch JSONDecodeError, which was likely the silent error
 try:
     with open('profiles.json', 'r') as f:
         SAMPLE_PROFILES = json.load(f)
 except FileNotFoundError:
+    SAMPLE_PROFILES = {}
+except json.JSONDecodeError as e:
+    st.error(f"Error: 'profiles.json' file is corrupted (Invalid JSON format). Please fix the file. Details: {e}")
+    SAMPLE_PROFILES = {}
+except Exception as e:
+    st.warning(f"Warning: Could not load sample profiles. {e}")
     SAMPLE_PROFILES = {}
 
 col_input, col_output = st.columns([1, 2.5])
@@ -307,32 +324,11 @@ with col_input:
         'preferred_duration': preferred_duration,
     }
     st.markdown("---")
+    
+    # FIX: Calculate and save results to session state ONLY on button click
     if st.button("🚀 Generate Learning Path", type="primary"):
-        st.session_state['path_generated'] = True
-        st.session_state.messages = []
-    st.subheader("🗣️ PersonalAI Chat Settings")
-    st.session_state.tts_enabled = st.checkbox("Enable Text-to-Speech (TTS) Reply", value=st.session_state.tts_enabled)
-    if st.session_state.tts_enabled:
-        selected_lang_name = st.selectbox("Select Voice Language:", list(LANGUAGE_DICT.keys()), key='tts_language_selector', index=list(LANGUAGE_DICT.keys()).index(st.session_state.tts_language) if st.session_state.tts_language in LANGUAGE_DICT else 0)
-        st.session_state.tts_language = selected_lang_name
-        
-        # Determine available engines and set default
-        available_engines = []
-        if gTTS: available_engines.append("gtts")
-        # NOTE: edge_tts requires asynchronous calls not natively supported by Streamlit's simple script execution model,
-        # but the code handles it via asyncio.run. We ensure it's selectable if the import succeeded.
-        if edge_tts: available_engines.append("edge_tts")
-        if not available_engines: available_engines.append("None")
-
-        current_engine_index = available_engines.index(st.session_state.tts_engine) if st.session_state.tts_engine in available_engines else 0
-        st.session_state.tts_engine = st.selectbox("TTS Engine", available_engines, index=current_engine_index)
-
-with col_output:
-    st.markdown("## 🧠 Recommendation and Chat Output")
-    if st.session_state.get('path_generated', False):
         if not USER_PROFILE['technical_skills'].strip() or not USER_PROFILE['target_domain'].strip():
             st.error("Please provide at least your Technical Skills and Target Career Domain.")
-            st.session_state['path_generated'] = False
         else:
             with st.spinner("Analyzing profile, computing similarity, and generating LLM rationale..."):
                 recommendations_df = recommend_courses(
@@ -342,42 +338,71 @@ with col_output:
                     MODEL,
                     LLM_CLIENT
                 )
-            st.markdown(f"### 🎯 Learning Path for **{target_domain}**")
-            st.markdown(f"**Based on:** {USER_PROFILE['technical_skills']}")
-            # --- SHORT-TERM PLAN ---
-            st.divider()
-            st.subheader("🗓️ Short-Term Plan (Next 1-3 Months)")
-            st.caption("Foundational, high-impact courses for immediate skill gain.")
-            short_term = recommendations_df[recommendations_df['timeline'] == 'Short-Term']
-            if not short_term.empty:
-                for i, row in short_term.iterrows():
-                    st.success(f"**{row['title']}** ({row['provider']})")
-                    cols = st.columns([1, 1, 1, 4])
-                    cols[0].metric("Fit Score", f"{row['fit_score']}%")
-                    cols[1].metric("Level", row['level'])
-                    cols[2].metric("Duration", row['duration'])
-                    cols[3].markdown(f"**Rationale:** {row['rationale']}")
-                    st.markdown(f"**Enroll:** [Access Course Link Here]({row['link']})")
-                    st.markdown("---")
-            else:
-                st.info("No courses prioritized for the short term based on current criteria.")
-            # --- LONG-TERM PLAN ---
-            st.divider()
-            st.subheader("📚 Long-Term Plan (Next 3-12 Months)")
-            st.caption("Specialization and advanced certifications to achieve your career goal.")
-            long_term = recommendations_df[recommendations_df['timeline'] == 'Long-Term']
-            if not long_term.empty:
-                for i, row in long_term.iterrows():
-                    st.info(f"**{row['title']}** ({row['provider']})")
-                    cols = st.columns([1, 1, 1, 4])
-                    cols[0].metric("Fit Score", f"{row['fit_score']}%")
-                    cols[1].metric("Level", row['level'])
-                    cols[2].metric("Duration", row['duration'])
-                    cols[3].markdown(f"**Rationale:** {row['rationale']}")
-                    st.markdown(f"**Enroll:** [Access Course Link Here]({row['link']})")
-                    st.markdown("---")
-            else:
-                st.info("No courses recommended for the long term.")
+            # Store results and set flag
+            st.session_state['recommendations_df'] = recommendations_df
+            st.session_state['path_generated'] = True 
+            st.session_state.messages = [] # Clear chat history on new path generation
+
+    st.subheader("🗣️ PersonalAI Chat Settings")
+    st.session_state.tts_enabled = st.checkbox("Enable Text-to-Speech (TTS) Reply", value=st.session_state.tts_enabled)
+    if st.session_state.tts_enabled:
+        selected_lang_name = st.selectbox("Select Voice Language:", list(LANGUAGE_DICT.keys()), key='tts_language_selector', index=list(LANGUAGE_DICT.keys()).index(st.session_state.tts_language) if st.session_state.tts_language in LANGUAGE_DICT else 0)
+        st.session_state.tts_language = selected_lang_name
+        
+        available_engines = []
+        if gTTS: available_engines.append("gtts")
+        if edge_tts: available_engines.append("edge_tts")
+        if not available_engines: available_engines.append("None")
+
+        current_engine_index = available_engines.index(st.session_state.tts_engine) if st.session_state.tts_engine in available_engines else 0
+        st.session_state.tts_engine = st.selectbox("TTS Engine", available_engines, index=current_engine_index)
+
+with col_output:
+    st.markdown("## 🧠 Recommendation and Chat Output")
+    
+    # FIX: Check if the path has been generated and use the stored DataFrame
+    if st.session_state.get('path_generated', False) and not st.session_state.recommendations_df.empty:
+        recommendations_df = st.session_state.recommendations_df
+        target_domain = USER_PROFILE['target_domain']
+
+        st.markdown(f"### 🎯 Learning Path for **{target_domain}**")
+        st.markdown(f"**Based on:** {USER_PROFILE['technical_skills']}")
+        
+        # --- SHORT-TERM PLAN ---
+        st.divider()
+        st.subheader("🗓️ Short-Term Plan (Next 1-3 Months)")
+        st.caption("Foundational, high-impact courses for immediate skill gain.")
+        short_term = recommendations_df[recommendations_df['timeline'] == 'Short-Term']
+        if not short_term.empty:
+            for i, row in short_term.iterrows():
+                st.success(f"**{row['title']}** ({row['provider']})")
+                cols = st.columns([1, 1, 1, 4])
+                cols[0].metric("Fit Score", f"{row['fit_score']}%")
+                cols[1].metric("Level", row['level'])
+                cols[2].metric("Duration", row['duration'])
+                cols[3].markdown(f"**Rationale:** {row['rationale']}")
+                st.markdown(f"**Enroll:** [Access Course Link Here]({row['link']})")
+                st.markdown("---")
+        else:
+            st.info("No courses prioritized for the short term based on current criteria.")
+        
+        # --- LONG-TERM PLAN ---
+        st.divider()
+        st.subheader("📚 Long-Term Plan (Next 3-12 Months)")
+        st.caption("Specialization and advanced certifications to achieve your career goal.")
+        long_term = recommendations_df[recommendations_df['timeline'] == 'Long-Term']
+        if not long_term.empty:
+            for i, row in long_term.iterrows():
+                st.info(f"**{row['title']}** ({row['provider']})")
+                cols = st.columns([1, 1, 1, 4])
+                cols[0].metric("Fit Score", f"{row['fit_score']}%")
+                cols[1].metric("Level", row['level'])
+                cols[2].metric("Duration", row['duration'])
+                cols[3].markdown(f"**Rationale:** {row['rationale']}")
+                st.markdown(f"**Enroll:** [Access Course Link Here]({row['link']})")
+                st.markdown("---")
+        else:
+            st.info("No courses recommended for the long term.")
     else:
         st.info("Please set up your profile on the left and click 'Generate Learning Path' to view recommendations.")
 
@@ -401,17 +426,10 @@ with col_output:
                 lang_code = LANGUAGE_DICT.get(lang_name, "en")
                 tts_engine = st.session_state.tts_engine
                 
-                # Handling the asyncio requirement for edge_tts if selected
-                if tts_engine == "edge_tts" and edge_tts is not None:
-                    # The function text_to_speech_conversion handles the asyncio.run call internally now.
-                    audio_data = text_to_speech_conversion(
-                        response_text, lang_code, engine=tts_engine, lang_name=lang_name
-                    )
-                else:
-                    audio_data = text_to_speech_conversion(
-                        response_text, lang_code, engine="gtts"
-                    )
-
+                audio_data = text_to_speech_conversion(
+                    response_text, lang_code, engine=tts_engine, lang_name=lang_name
+                )
+                
                 if audio_data:
                     st.audio(audio_data, format="audio/mp3", autoplay=True)
             st.session_state.messages.append({"role": "assistant", "content": response_text})
