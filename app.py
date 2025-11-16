@@ -95,16 +95,10 @@ def load_model():
 def load_data():
     """
     Loads data ONLY from the local courses.csv file for vector embeddings.
+    Raises exception if file not found or other issues.
     """
-    try:
-        # Load courses only from the local file
-        courses_df = pd.read_csv('courses.csv')
-    except FileNotFoundError:
-        st.error("Error: 'courses.csv' not found. Please ensure the file is present in the working directory.")
-        st.stop()
-    except Exception as e:
-        st.error(f"Error loading 'courses.csv': {e}")
-        st.stop()
+    # Load courses only from the local file
+    courses_df = pd.read_csv('courses.csv')
         
     # Data Cleaning and Preparation
     courses_df = courses_df.dropna(subset=['Title']).reset_index(drop=True)
@@ -122,8 +116,6 @@ def load_data():
     ).fillna('')
     
     course_embeddings = model.encode(courses_df['search_text'].tolist(), show_progress_bar=False)
-    
-    st.toast(f"Knowledge Base loaded with {len(courses_df)} unique courses.", icon="🧠")
     
     return courses_df, course_embeddings
 
@@ -236,6 +228,9 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
 
 def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
     """Retrieves the most relevant course data using vector search."""
+    if courses_df is None or course_embeddings is None:
+        return "Course data is unavailable."
+
     query_embed = model.encode([query])[0].reshape(1, -1)
     similarity_scores = cosine_similarity(query_embed, course_embeddings)[0]
     top_indices = np.argsort(similarity_scores)[::-1][:top_k]
@@ -255,7 +250,9 @@ def run_rag_query(query, courses_df, course_embeddings, model, llm_client, stati
     RAG Query function that uses both dynamic course search (from CSV) and static text KB (from prompt).
     """
     if not llm_client:
-        return "The AI Agent is not initialized."
+        return "The AI Agent is not initialized. Please ensure the Gemini API key is set."
+    if courses_df is None or course_embeddings is None:
+        return "The course knowledge base is unavailable due to a loading error."
         
     # 1. Dynamic Course Retrieval (Vector Search)
     course_context_vector = get_rag_context(query, courses_df, course_embeddings, model)
@@ -350,14 +347,24 @@ if "recommendations_df" not in st.session_state:
 st.set_page_config(layout="wide", page_title="AI Learning Path Recommender")
 st.title("💡 AI-Powered Personalized Learning Path Recommender")
 
+# --- FIX: Initialize variables before the try block ---
+COURSES_DF = None
+COURSE_EMBEDDINGS = None
+MODEL = None
+LLM_CLIENT = None
+
 # Load data and models
 try:
     COURSES_DF, COURSE_EMBEDDINGS = load_data()
     MODEL = load_model()
     LLM_CLIENT = setup_llm()
+    # Now that the loading succeeded, display the toast
+    st.toast(f"Knowledge Base loaded with {len(COURSES_DF)} unique courses.", icon="🧠")
+except FileNotFoundError:
+    st.error("🚨 Error: 'courses.csv' not found. Please ensure the file is present in the working directory.")
 except Exception as e:
-    st.error(f"Could not initialize system components: {e}.")
-
+    st.error(f"⚠️ Could not initialize system components. Check API keys and data files. Error: {e}.")
+    
 # Load Sample Profiles
 try:
     with open('profiles.json', 'r') as f:
@@ -376,7 +383,7 @@ with col_input:
     loaded_profile = SAMPLE_PROFILES[profile_selection] if profile_selection != "Manual Input" else {}
     st.subheader("Required Background")
     education_options = ["Bachelor's", "Master's", "PhD", "High School/GED", "Certificate"]
-    education_level = st.selectbox("Education Level:", education_options, index=education_options.index(loaded_profile.get('education_level', "Bachelor's")))
+    education_level = st.selectbox("Education Level:", education_options, index=education_options.index(loaded_profile.get('education_level', "Bachelor's')))
     major = st.text_input("Major/Degree:", value=loaded_profile.get('major', "Computer Science"))
     technical_skills = st.text_area("Technical Skills (comma separated):", value=loaded_profile.get('technical_skills', "Python, SQL, Data Analysis, Excel, Git"))
     soft_skills = st.text_area("Soft Skills (comma separated):", value=loaded_profile.get('soft_skills', "Communication, Leadership, Problem-Solving"))
@@ -398,7 +405,9 @@ with col_input:
     
     # Execution logic for generating the path 
     if st.button("🚀 Generate Learning Path", type="primary"):
-        if not USER_PROFILE['technical_skills'].strip() or not USER_PROFILE['target_domain'].strip():
+        if COURSES_DF is None or LLM_CLIENT is None:
+            st.warning("Cannot generate path: Core system components (data or AI agent) failed to load.")
+        elif not USER_PROFILE['technical_skills'].strip() or not USER_PROFILE['target_domain'].strip():
             st.error("Please provide at least your Technical Skills and Target Career Domain.")
         else:
             with st.spinner("Analyzing profile, computing similarity, and generating LLM rationale..."):
@@ -478,31 +487,37 @@ with col_output:
     st.divider()
     st.header("💬 PersonalAI Course Recommender (RAG Agent)")
     st.caption("Ask questions about the courses in the catalog (e.g., 'What is the deep learning specialization?' or 'Find the Docker course link').")
+    
+    if COURSES_DF is None or LLM_CLIENT is None:
+        st.warning("Chat is disabled: Data or AI Agent failed to load during initialization.")
+    
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-    if prompt := st.chat_input("Ask a question about the courses in the catalog..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        with st.chat_message("assistant"):
-            with st.spinner("Searching catalog and knowledge base..."):
-                # Call RAG with the static KB text included
-                response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT, KNOWLEDGE_BASE_TEXT)
-            st.markdown(response_text)
             
-            # --- TTS EXECUTION ---
-            if st.session_state.tts_enabled and st.session_state.tts_engine != "None":
-                lang_name = st.session_state.tts_language
-                lang_code = LANGUAGE_DICT.get(lang_name, "en")
-                tts_engine = st.session_state.tts_engine
+    if COURSES_DF is not None and LLM_CLIENT is not None:
+        if prompt := st.chat_input("Ask a question about the courses in the catalog..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            with st.chat_message("assistant"):
+                with st.spinner("Searching catalog and knowledge base..."):
+                    # Call RAG with the static KB text included
+                    response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT, KNOWLEDGE_BASE_TEXT)
+                st.markdown(response_text)
                 
-                audio_data = text_to_speech_conversion(
-                    response_text, lang_code, engine=tts_engine, lang_name=lang_name
-                )
+                # --- TTS EXECUTION ---
+                if st.session_state.tts_enabled and st.session_state.tts_engine != "None":
+                    lang_name = st.session_state.tts_language
+                    lang_code = LANGUAGE_DICT.get(lang_name, "en")
+                    tts_engine = st.session_state.tts_engine
+                    
+                    audio_data = text_to_speech_conversion(
+                        response_text, lang_code, engine=tts_engine, lang_name=lang_name
+                    )
+                    
+                    if audio_data:
+                        st.audio(audio_data, format="audio/mp3", autoplay=True)
+                # --- END TTS EXECUTION ---
                 
-                if audio_data:
-                    st.audio(audio_data, format="audio/mp3", autoplay=True)
-            # --- END TTS EXECUTION ---
-            
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
+                st.session_state.messages.append({"role": "assistant", "content": response_text})
