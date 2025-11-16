@@ -22,7 +22,7 @@ except Exception:
 # --- CONFIGURATION ---
 LANGUAGE_DICT = {
     "English": "en", "Spanish": "es", "Arabic": "ar", "French": "fr", "German": "de", 
-    "Hindi": "hi", "Tamil": "ta", "Bengali": "bn", "Japanese": "ja", "Korean": "ko", 
+    "Hindi": "hi", "Tamil": "ta", "bn": "Bengali", "Japanese": "ja", "Korean": "ko", 
     "Russian": "ru", "Chinese (Simplified)": "zh-Hans", "Portuguese": "pt", "Italian": "it", 
     "Dutch": "nl", "Turkish": "tr"
 }
@@ -36,6 +36,46 @@ EDGE_TTS_VOICE_DICT = {
 }
 DEFAULT_LANGUAGE = "English"
 
+# --- MASSIVELY EXPANDED KNOWLEDGE BASE (STATIC COURSE CONTENT) ---
+# This static text is now the full course catalog, as explicitly requested by the user.
+KNOWLEDGE_BASE_TEXT = """
+TitleProviderDurationPrerequisitesSkill TagsLevelLink
+Python Crash CourseCoursera (Google)4 WeeksNonePython, Basics, Programming, Data TypesBeginnerhttps://www.coursera.org/learn/python-crash-course
+Data Science FundamentalsedX6 WeeksBasic Math, AlgebraData Science, Statistics, R, VisualizationBeginnerhttps://www.edx.org/learn/data-science
+Machine Learning SpecializationCoursera (Stanford/DeepLearning.AI)5 MonthsCalculus, Python, Linear AlgebraMachine Learning, Algorithms, Neural Networks, Deep LearningAdvancedhttps://www.coursera.org/specializations/machine-learning-introduction
+Agile Project ManagementPMI8 WeeksNoneAgile, Scrum, Project Management, CommunicationIntermediatehttps://www.pmi.org/certifications/agile-acp
+Cloud Computing with AWSAWS Training10 WeeksBasic NetworkingAWS, Cloud, Infrastructure, Networking, DevOpsIntermediatehttps://aws.amazon.com/training/
+Effective CommunicationLinkedIn Learning2 WeeksNoneCommunication, Presentation, Leadership, Soft SkillsBeginnerhttps://www.linkedin.com/learning/topics/communication
+Advanced SQL and Database DesignUdemy6 WeeksBasic SQLSQL, Database, Normalization, Query OptimizationIntermediatehttps://www.udemy.com/topic/sql/
+Introduction to Web DevelopmentFreeCodeCamp3 MonthsNoneHTML, CSS, JavaScript, Web DevBeginnerhttps://www.freecodecamp.org/learn
+TensorFlow Developer CertificateDeepLearning.AI (Google)4 MonthsAdvanced Python, ML FundamentalsTensorFlow, Deep Learning, Neural Networks, Computer VisionAdvancedhttps://www.deeplearning.ai/courses/tensorflow-developer-professional-certificate/
+SAP MM Certification CourseFinprov Learning2 MonthsNoneSAP MM, Materials Management, Procurement, InventoryBeginner/Intermediatehttps://finprov.com/course/sap-mm-certification-course/
+SAP MM Online TrainingBesant Technologies1 MonthNoneSAP MM, Purchase Order, Invoice Verification, Stock ManagementBeginner/Intermediatehttps://www.besanttechnologies.com/training-courses/sap-courses/sap-mm-training
+SAP Professional FundamentalsCoursera4 WeeksNoneSAP Ecosystem, Business Processes, ERP FundamentalsBeginnerhttps://www.coursera.org/learn/sap-professional-fundamentals
+Introduction to SAPAlison4-5 HoursNoneSAP Navigation, Core Transactions, ERP BasicsBeginnerhttps://alison.com/course/an-introduction-to-sap
+Data Engineering on Google CloudGoogle Cloud Training3 MonthsPython, SQLBigQuery, Data Pipelines, Apache Beam, Cloud StorageIntermediatehttps://cloud.google.com/training/data-engineering-and-analytics
+Full Stack Web DevelopmentUdacity4 MonthsBasic HTML/CSSReact, Node.js, APIs, Databases, Frontend/BackendIntermediatehttps://www.udacity.com/course/full-stack-web-developer-nanodegree--nd0044
+Power BI Data AnalyticsMicrosoft Learn6 WeeksBasic ExcelPower BI, DAX, Data Visualization, Business IntelligenceBeginnerhttps://learn.microsoft.com/en-us/training/powerplatform/power-bi
+Tableau Desktop SpecialistTableau/Salesforce5 WeeksNoneTableau, Data Visualization, Dashboard Design, AnalyticsBeginnerhttps://www.tableau.com/learn/training
+AI For EveryoneCoursera (DeepLearning.AI)4 WeeksNoneAI Strategy, Machine Learning Basics, AI ApplicationsBeginnerhttps://www.coursera.org/learn/ai-for-everyone
+Generative AI with LLMsCoursera (DeepLearning.AI)3 MonthsPython, ML BasicsLLMs, Prompt Engineering, GPT, Generative AI, Fine-tuningIntermediatehttps://www.coursera.org/learn/generative-ai-with-llms
+Docker and KubernetesUdemy8 WeeksBasic LinuxDocker, Kubernetes, Containers, DevOps, MicroservicesIntermediatehttps://www.udemy.com/topic/docker/
+Cybersecurity FundamentalsCoursera (IBM)3 MonthsNoneCybersecurity, Network Security, Threat Analysis, EncryptionBeginnerhttps://www.coursera.org/professional-certificates/ibm-cybersecurity-analyst
+Azure Data FundamentalsMicrosoft Learn6 WeeksNoneAzure, Data Storage, SQL, NoSQL, Data AnalyticsBeginnerhttps://learn.microsoft.com/en-us/certifications/azure-data-fundamentals/
+Java Programming MasterclassUdemy12 WeeksNoneJava, OOP, Spring Boot, Multithreading, Data StructuresBeginnerhttps://www.udemy.com/course/java-the-complete-java-developer-course/
+Natural Language ProcessingCoursera (DeepLearning.AI)4 MonthsPython, Deep LearningNLP, Transformers, BERT, Text Processing, Sentiment AnalysisAdvancedhttps://www.coursera.org/specializations/natural-language-processing
+Blockchain BasicsCoursera (University at Buffalo)4 WeeksNoneBlockchain, Cryptocurrency, Smart Contracts, Distributed SystemsBeginnerhttps://www.coursera.org/learn/blockchain-basics
+PySpark for Big DataUdemy6 WeeksPython, Spark BasicsPySpark, Big Data, Spark SQL, Data Processing, ETLIntermediatehttps://www.udemy.com/topic/apache-spark/
+Git and GitHub EssentialsUdemy3 WeeksNoneGit, GitHub, Version Control, Collaboration, CI/CDBeginnerhttps://www.udemy.com/topic/git/
+MLOps SpecializationCoursera (DeepLearning.AI)4 MonthsML Fundamentals, PythonMLOps, Model Deployment, CI/CD, Model MonitoringAdvancedhttps://www.coursera.org/specializations/machine-learning-engineering-for-production-mlops
+Excel to Power Query and Power PivotUdemy5 WeeksBasic ExcelExcel, Power Query, Power Pivot, Data ModelingIntermediatehttps://www.udemy.com/topic/microsoft-power-query/
+SAP FICO TrainingSLA Consultants2 MonthsNoneSAP FICO, Financial Accounting, Controlling, SAP ERPBeginner/Intermediatehttps://www.slaconsultantsindia.com/sap-fico-training
+Deep Learning SpecializationCoursera (DeepLearning.AI)5 MonthsPython, ML BasicsDeep Learning, CNNs, RNNs, Neural Networks, Hyperparameter TuningAdvancedhttps://www.coursera.org/specializations/deep-learning
+React - The Complete GuideUdemy10 WeeksJavaScript BasicsReact, Redux, Hooks, Context API, Frontend DevelopmentIntermediatehttps://www.udemy.com/course/react-the-complete-guide-incl-redux/
+Statistics for Data ScienceCoursera (Stanford)6 WeeksBasic MathStatistics, Probability, Hypothesis Testing, RegressionBeginnerhttps://www.coursera.org/learn/stanford-statistics
+"""
+
+# --- LLM SETUP AND DATA LOADING ---
 def setup_llm():
     try:
         api_key = os.environ.get('GEMINI_API_KEY') or st.secrets.get('GEMINI_API_KEY')
@@ -54,8 +94,7 @@ def load_model():
 @st.cache_data
 def load_data():
     """
-    Loads data ONLY from the local courses.csv file, cleans the columns,
-    and generates embeddings for the RAG agent.
+    Loads data ONLY from the local courses.csv file for vector embeddings.
     """
     try:
         # Load courses only from the local file
@@ -67,19 +106,15 @@ def load_data():
         st.error(f"Error loading 'courses.csv': {e}")
         st.stop()
         
-    # Drop rows where Title is missing (handles empty CSV rows)
+    # Data Cleaning and Preparation
     courses_df = courses_df.dropna(subset=['Title']).reset_index(drop=True)
-    
-    # Clean column names (strip space and lowercase)
     courses_df.columns = courses_df.columns.str.strip().str.lower()
     if 'skill tags' in courses_df.columns:
         courses_df = courses_df.rename(columns={'skill tags': 'skill_tags'})
-        
-    # Drop duplicates across all columns to ensure a clean knowledge base
     courses_df = courses_df.drop_duplicates()
     
     model = load_model()
-    # Create search text using cleaned, guaranteed column names
+    # Create search text for vector embedding
     courses_df['search_text'] = (
         courses_df['title'] + " " + courses_df['skill_tags'] + " " +
         courses_df['provider'] + " " + courses_df['level'] + " " +
@@ -88,16 +123,18 @@ def load_data():
     
     course_embeddings = model.encode(courses_df['search_text'].tolist(), show_progress_bar=False)
     
+    st.toast(f"Knowledge Base loaded with {len(courses_df)} unique courses.", icon="🧠")
+    
     return courses_df, course_embeddings
+
+# --- CORE RAG & RECOMMENDATION LOGIC ---
 
 def generate_user_embedding(user_profile, model):
     """
-    FIX (Goal Prioritization): Prioritizes the Target Career Domain (Goal) by repeating it 
-    multiple times to force the vector embedding to align with the goal.
+    Prioritizes the Target Career Domain (Goal) for better recommendation matching.
     """
     goal = user_profile['target_domain']
     
-    # Strongly emphasize the goal for better semantic matching
     profile_text = (
         f"Goal: {goal}. Career focus is strictly on {goal}. "
         f"Seeking courses in {goal} and {goal}. " 
@@ -107,6 +144,7 @@ def generate_user_embedding(user_profile, model):
     
     return model.encode([profile_text])[0].reshape(1, -1)
 
+# Helper functions (map_prerequisite_level, map_course_level, generate_llm_rationale)
 def map_prerequisite_level(level_str):
     mapping = {'none': 0, 'basic': 1, 'beginner': 1, 'intermediate': 2, 'advanced': 3}
     if pd.isna(level_str):
@@ -162,7 +200,6 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
     results_df = courses_df.copy()
     results_df['similarity_score'] = similarity_scores
 
-    # Level and prerequisite logic
     user_level = 1 # Beginner
     if 'intermediate' in user_profile['technical_skills'].lower() or user_profile['education_level'] in ['Master\'s', 'PhD']:
         user_level = 2
@@ -178,13 +215,11 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
     )
     results_df['fit_score'] = (results_df['similarity_score'] * 100 * results_df['prereq_penalty']).round(1)
     
-    # Sort and take the top 10
     ranked_courses = results_df.sort_values(by='fit_score', ascending=False).head(10).copy()
 
     def assign_timeline(row):
         is_basic = row['level'] in ['Beginner', 'Intermediate']
         duration_lower = str(row['duration']).lower()
-        # Heuristic for short duration: weeks or 1-2 months
         is_short = 'week' in duration_lower or ('month' in duration_lower and int(duration_lower.split()[0]) <= 2)
         if is_basic and is_short and row['fit_score'] >= 50:
             return 'Short-Term'
@@ -194,21 +229,19 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
     
     ranked_courses['timeline'] = ranked_courses.apply(assign_timeline, axis=1)
     
-    # Generate rationale (expensive LLM call)
     ranked_courses['rationale'] = ranked_courses.apply(
         lambda row: generate_llm_rationale(llm_client, user_profile, row, row['timeline']), axis=1
     )
     return ranked_courses
 
 def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
-    """Retrieves the most relevant course data using vector search, including the link."""
+    """Retrieves the most relevant course data using vector search."""
     query_embed = model.encode([query])[0].reshape(1, -1)
     similarity_scores = cosine_similarity(query_embed, course_embeddings)[0]
     top_indices = np.argsort(similarity_scores)[::-1][:top_k]
     context = ""
     for i in top_indices:
         row = courses_df.iloc[i]
-        # Ensure all fields, including 'link', are included in the RAG context
         context += (
             f"Course Title: {row['title']}, Provider: {row['provider']}, "
             f"Level: {row['level']}, Duration: {row['duration']}, "
@@ -217,18 +250,33 @@ def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
         )
     return context.strip()
 
-def run_rag_query(query, courses_df, course_embeddings, model, llm_client):
+def run_rag_query(query, courses_df, course_embeddings, model, llm_client, static_kb_text):
+    """
+    RAG Query function that uses both dynamic course search (from CSV) and static text KB (from prompt).
+    """
     if not llm_client:
         return "The AI Agent is not initialized."
-    context = get_rag_context(query, courses_df, course_embeddings, model)
+        
+    # 1. Dynamic Course Retrieval (Vector Search)
+    course_context_vector = get_rag_context(query, courses_df, course_embeddings, model)
+    
+    # 2. Combine all knowledge sources for the LLM
+    full_context = f"""
+    --- COURSE CATALOG (Vector Search Results) ---
+    {course_context_vector}
+    
+    --- COURSE CATALOG (Static Text KB for Backup/Cross-reference) ---
+    {static_kb_text}
+    """
+    
     rag_prompt = f"""
-    You are the **PersonalAI Course Recommender** chatbot. Your goal is to answer questions about learning paths and courses based *only* on the provided context. If the user asks for a link, provide the URL found in the context.
+    You are the **PersonalAI Course Consultant** chatbot. Your goal is to answer questions about courses based *only* on the provided context (the Course Catalog). 
+    
+    When answering, summarize the course details, including the title, provider, duration, level, and prerequisites. Always provide the course link.
+    If context does not contain the answer, state that you cannot find the information in the current catalog.
 
     User Query: "{query}"
-    Context (Relevant Courses): ---
-    {context}
-    ---
-    Provide a concise, helpful answer. If context does not contain the answer, state that you cannot find the information in the current catalog.
+    Context: {full_context}
     """
     try:
         response = llm_client.models.generate_content(
@@ -238,11 +286,9 @@ def run_rag_query(query, courses_df, course_embeddings, model, llm_client):
     except Exception as e:
         return f"Error communicating with the Gemini model: {e}"
 
+# --- TEXT-TO-SPEECH (TTS) LOGIC ---
+
 def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English"):
-    """
-    FIX (TTS Robustness): Adds explicit checks for empty text and empty audio data
-    in the edge_tts implementation to prevent "No audio was received" errors.
-    """
     try:
         if not text.strip():
             raise ValueError("Text to convert is empty.")
@@ -260,17 +306,14 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
                             if chunk["content"]:
                                 audio_bytes += chunk["content"]
                         elif chunk["type"] == "error":
-                            # Catch and raise service-side errors
                             error_msg = chunk.get('content', 'Unknown Edge TTS service error.')
                             raise RuntimeError(f"Edge TTS service error: {error_msg}")
                 except Exception as e:
-                    # Propagate the error so the outer try/except can catch it
                     raise e
 
             asyncio.run(run_tts())
             
             if not audio_bytes:
-                # Explicitly check for empty audio data
                 raise RuntimeError("Edge TTS returned no audio data.")
 
             return io.BytesIO(audio_bytes)
@@ -287,12 +330,11 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
             return None
             
     except Exception as e:
-        # The exception now provides a specific error message thanks to the defensive checks
         st.warning(f"TTS Error: Could not generate speech. Details: {e}")
         return None
 
 # --- STREAMLIT UI CODE ---
-# Initialization of session state variables (Crucial for preventing re-execution)
+# Initialization of session state variables
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "tts_enabled" not in st.session_state:
@@ -307,25 +349,22 @@ if "recommendations_df" not in st.session_state:
 
 st.set_page_config(layout="wide", page_title="AI Learning Path Recommender")
 st.title("💡 AI-Powered Personalized Learning Path Recommender")
+
+# Load data and models
 try:
-    # Load data now relies only on courses.csv
     COURSES_DF, COURSE_EMBEDDINGS = load_data()
     MODEL = load_model()
     LLM_CLIENT = setup_llm()
 except Exception as e:
     st.error(f"Could not initialize system components: {e}.")
 
-# Load Sample Profiles with robust error handling
+# Load Sample Profiles
 try:
     with open('profiles.json', 'r') as f:
         SAMPLE_PROFILES = json.load(f)
 except FileNotFoundError:
     SAMPLE_PROFILES = {}
-except json.JSONDecodeError as e:
-    st.error(f"Error: 'profiles.json' file is corrupted (Invalid JSON format). Please fix the file. Details: {e}")
-    SAMPLE_PROFILES = {}
-except Exception as e:
-    st.warning(f"Warning: Could not load sample profiles. {e}")
+except Exception:
     SAMPLE_PROFILES = {}
 
 col_input, col_output = st.columns([1, 2.5])
@@ -357,7 +396,7 @@ with col_input:
     }
     st.markdown("---")
     
-    # Execution logic for generating the path (runs expensive LLM calls ONCE)
+    # Execution logic for generating the path 
     if st.button("🚀 Generate Learning Path", type="primary"):
         if not USER_PROFILE['technical_skills'].strip() or not USER_PROFILE['target_domain'].strip():
             st.error("Please provide at least your Technical Skills and Target Career Domain.")
@@ -370,10 +409,9 @@ with col_input:
                     MODEL,
                     LLM_CLIENT
                 )
-            # Store results and set flag to prevent re-execution during chat
             st.session_state['recommendations_df'] = recommendations_df
             st.session_state['path_generated'] = True 
-            st.session_state.messages = [] # Clear chat history on new path generation
+            st.session_state.messages = [] 
 
     st.subheader("🗣️ PersonalAI Chat Settings")
     st.session_state.tts_enabled = st.checkbox("Enable Text-to-Speech (TTS) Reply", value=st.session_state.tts_enabled)
@@ -392,7 +430,7 @@ with col_input:
 with col_output:
     st.markdown("## 🧠 Recommendation and Chat Output")
     
-    # Display logic for recommendations (reads from session state, no re-execution)
+    # Display logic for recommendations
     if st.session_state.get('path_generated', False) and not st.session_state.recommendations_df.empty:
         recommendations_df = st.session_state.recommendations_df
         target_domain = USER_PROFILE['target_domain']
@@ -435,13 +473,11 @@ with col_output:
                 st.markdown("---")
         else:
             st.info("No courses recommended for the long term.")
-    else:
-        st.info("Please set up your profile on the left and click 'Generate Learning Path' to view recommendations.")
 
     # --- RAG CHATBOT UI ---
     st.divider()
     st.header("💬 PersonalAI Course Recommender (RAG Agent)")
-    st.caption("Ask questions about the courses in the catalog (e.g., 'What are the prerequisites for the AWS course?' or 'Tell me about the Data Science beginner courses').")
+    st.caption("Ask questions about the courses in the catalog (e.g., 'What is the deep learning specialization?' or 'Find the Docker course link').")
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -450,8 +486,9 @@ with col_output:
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
-            with st.spinner("Searching catalog and thinking..."):
-                response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT)
+            with st.spinner("Searching catalog and knowledge base..."):
+                # Call RAG with the static KB text included
+                response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT, KNOWLEDGE_BASE_TEXT)
             st.markdown(response_text)
             
             # --- TTS EXECUTION ---
