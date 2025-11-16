@@ -4,7 +4,7 @@ import numpy as np
 import json
 import os
 import io
-import asyncio # Added for edge_tts compatibility
+import asyncio 
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
@@ -98,12 +98,20 @@ def load_data():
     return courses_df, course_embeddings
 
 def generate_user_embedding(user_profile, model):
+    """
+    FIX: Prioritizes the Target Career Domain (Goal) by repeating it 
+    multiple times to force the vector embedding to align with the goal.
+    """
+    goal = user_profile['target_domain']
+    
+    # Strongly emphasize the goal for better semantic matching
     profile_text = (
+        f"Goal: {goal}. Career focus is strictly on {goal}. "
+        f"Seeking courses in {goal} and {goal}. " 
         f"Education: {user_profile['education_level']} in {user_profile['major']}. "
-        f"Technical Skills: {user_profile['technical_skills']}. "
-        f"Soft Skills: {user_profile['soft_skills']}. "
-        f"Goal Domain: {user_profile['target_domain']}."
+        f"Existing Skills: {user_profile['technical_skills']}."
     )
+    
     return model.encode([profile_text])[0].reshape(1, -1)
 
 def map_prerequisite_level(level_str):
@@ -176,20 +184,24 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
         results_df['prereq_level_num'] > user_level, 0.5, 1.0
     )
     results_df['fit_score'] = (results_df['similarity_score'] * 100 * results_df['prereq_penalty']).round(1)
+    
+    # Sort and take the top 10
     ranked_courses = results_df.sort_values(by='fit_score', ascending=False).head(10).copy()
 
     def assign_timeline(row):
         is_basic = row['level'] in ['Beginner', 'Intermediate']
         duration_lower = str(row['duration']).lower()
+        # Heuristic for short duration: weeks or 1-2 months
         is_short = 'week' in duration_lower or ('month' in duration_lower and int(duration_lower.split()[0]) <= 2)
         if is_basic and is_short and row['fit_score'] >= 50:
             return 'Short-Term'
         elif row['fit_score'] >= 40:
             return 'Long-Term'
         return 'Long-Term'
+    
     ranked_courses['timeline'] = ranked_courses.apply(assign_timeline, axis=1)
     
-    # This is the heavy LLM call, which must only be run once.
+    # Generate rationale (expensive LLM call)
     ranked_courses['rationale'] = ranked_courses.apply(
         lambda row: generate_llm_rationale(llm_client, user_profile, row, row['timeline']), axis=1
     )
@@ -203,7 +215,7 @@ def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
     context = ""
     for i in top_indices:
         row = courses_df.iloc[i]
-        # UPDATED: The code already had the full fields, including 'link'.
+        # Ensure all fields, including 'link', are included in the RAG context
         context += (
             f"Course Title: {row['title']}, Provider: {row['provider']}, "
             f"Level: {row['level']}, Duration: {row['duration']}, "
@@ -244,7 +256,8 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
                 nonlocal audio_bytes
                 async for chunk in communicate.stream():
                     if chunk["type"] == "audio":
-                        audio_bytes += chunk["content"]
+                        if chunk["content"]:
+                            audio_bytes += chunk["content"]
             asyncio.run(run_tts())
             return io.BytesIO(audio_bytes)
         elif engine == "gtts" and gTTS is not None:
@@ -261,6 +274,7 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
         return None
 
 # --- STREAMLIT UI CODE ---
+# Initialization of session state variables (Crucial for preventing re-execution)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "tts_enabled" not in st.session_state:
@@ -269,7 +283,6 @@ if "tts_language" not in st.session_state:
     st.session_state.tts_language = DEFAULT_LANGUAGE
 if "tts_engine" not in st.session_state:
     st.session_state.tts_engine = "gtts" if gTTS else ("edge_tts" if edge_tts else "None")
-# FIX: Initialize recommendations DataFrame to avoid re-running expensive LLM calls
 if "recommendations_df" not in st.session_state:
     st.session_state.recommendations_df = pd.DataFrame()
 
@@ -283,7 +296,7 @@ try:
 except Exception as e:
     st.error(f"Could not initialize system components: {e}.")
 
-# FIX: Broaden try-except block to catch JSONDecodeError, which was likely the silent error
+# Load Sample Profiles with robust error handling
 try:
     with open('profiles.json', 'r') as f:
         SAMPLE_PROFILES = json.load(f)
@@ -310,7 +323,7 @@ with col_input:
     technical_skills = st.text_area("Technical Skills (comma separated):", value=loaded_profile.get('technical_skills', "Python, SQL, Data Analysis, Excel, Git"))
     soft_skills = st.text_area("Soft Skills (comma separated):", value=loaded_profile.get('soft_skills', "Communication, Leadership, Problem-Solving"))
     st.subheader("Goals & Preferences (Optional)")
-    target_domain = st.text_input("Target Career Domain (e.g., Data Science, UX Design, DevOps):", value=loaded_profile.get('target_domain', "Data Science"))
+    target_domain = st.text_input("Target Career Domain (e.g., Data Science, **SAP MM**, DevOps):", value=loaded_profile.get('target_domain', "Data Science"))
     duration_options = ["Short-term (1-3 months)", "Long-term (3-12 months)", "Any"]
     loaded_duration = loaded_profile.get('preferred_duration', "Any")
     duration_index = next((i for i, opt in enumerate(duration_options) if loaded_duration in opt), duration_options.index("Any"))
@@ -325,7 +338,7 @@ with col_input:
     }
     st.markdown("---")
     
-    # FIX: Calculate and save results to session state ONLY on button click
+    # Execution logic for generating the path (runs expensive LLM calls ONCE)
     if st.button("🚀 Generate Learning Path", type="primary"):
         if not USER_PROFILE['technical_skills'].strip() or not USER_PROFILE['target_domain'].strip():
             st.error("Please provide at least your Technical Skills and Target Career Domain.")
@@ -338,7 +351,7 @@ with col_input:
                     MODEL,
                     LLM_CLIENT
                 )
-            # Store results and set flag
+            # Store results and set flag to prevent re-execution during chat
             st.session_state['recommendations_df'] = recommendations_df
             st.session_state['path_generated'] = True 
             st.session_state.messages = [] # Clear chat history on new path generation
@@ -360,7 +373,7 @@ with col_input:
 with col_output:
     st.markdown("## 🧠 Recommendation and Chat Output")
     
-    # FIX: Check if the path has been generated and use the stored DataFrame
+    # Display logic for recommendations (reads from session state, no re-execution)
     if st.session_state.get('path_generated', False) and not st.session_state.recommendations_df.empty:
         recommendations_df = st.session_state.recommendations_df
         target_domain = USER_PROFILE['target_domain']
