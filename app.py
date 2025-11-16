@@ -38,7 +38,7 @@ EDGE_TTS_VOICE_DICT = {
 DEFAULT_LANGUAGE = "English"
 
 # URL to fetch data from (Google Sheets CSV export URL)
-# NOTE: Using the 'export?format=csv' endpoint is required to read Sheets content directly via pandas.
+# This URL is used to fetch the content of the sheet provided by the user.
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1BxCQ3uk6igdwG79PEeD0SIObK4Wlr0zZUG3hd6BrPsM/gviz/tq?tqx=out:csv&gid=0"
 
 def setup_llm():
@@ -60,13 +60,14 @@ def load_model():
 def load_data():
     """
     Loads data from both local courses.csv and the Google Sheet URL, combines them,
-    cleans the columns, and generates embeddings.
+    cleans the columns, and generates embeddings for the RAG agent.
     """
     all_data = []
 
     # 1. Load data from local courses.csv
     try:
-        local_df = pd.read_csv('courses.csv')
+        # Use the uploaded file content for local data
+        local_df = pd.read_csv("courses.csv")
         all_data.append(local_df)
         st.toast("Loaded local courses.csv.", icon="💾")
     except FileNotFoundError:
@@ -77,7 +78,7 @@ def load_data():
 
     # 2. Load data from Google Sheet URL
     try:
-        # Use a reliable direct CSV export link
+        # Fetch data from the Google Sheet via its CSV export link
         sheet_df = pd.read_csv(GOOGLE_SHEET_URL)
         all_data.append(sheet_df)
         st.toast("Successfully loaded courses from Google Sheet!", icon="🌐")
@@ -99,7 +100,7 @@ def load_data():
     if 'skill tags' in courses_df.columns:
         courses_df = courses_df.rename(columns={'skill tags': 'skill_tags'})
         
-    # Drop duplicates across all columns to ensure unique knowledge base entries
+    # Drop duplicates across all columns to ensure a clean knowledge base
     courses_df = courses_df.drop_duplicates()
     
     model = load_model()
