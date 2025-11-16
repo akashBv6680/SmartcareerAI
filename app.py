@@ -5,7 +5,6 @@ import json
 import os
 import io
 import asyncio 
-import urllib.parse
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
@@ -37,10 +36,6 @@ EDGE_TTS_VOICE_DICT = {
 }
 DEFAULT_LANGUAGE = "English"
 
-# URL to fetch data from (Google Sheets CSV export URL)
-# This URL is used to fetch the content of the sheet provided by the user.
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1BxCQ3uk6igdwG79PEeD0SIObK4Wlr0zZUG3hd6BrPsM/gviz/tq?tqx=out:csv&gid=0"
-
 def setup_llm():
     try:
         api_key = os.environ.get('GEMINI_API_KEY') or st.secrets.get('GEMINI_API_KEY')
@@ -59,39 +54,19 @@ def load_model():
 @st.cache_data
 def load_data():
     """
-    Loads data from both local courses.csv and the Google Sheet URL, combines them,
-    cleans the columns, and generates embeddings for the RAG agent.
+    Loads data ONLY from the local courses.csv file, cleans the columns,
+    and generates embeddings for the RAG agent.
     """
-    all_data = []
-
-    # 1. Load data from local courses.csv
     try:
-        # Use the uploaded file content for local data
-        local_df = pd.read_csv("courses.csv")
-        all_data.append(local_df)
-        st.toast("Loaded local courses.csv.", icon="💾")
+        # Load courses only from the local file
+        courses_df = pd.read_csv('courses.csv')
     except FileNotFoundError:
-        st.warning("Warning: 'courses.csv' not found locally. Using Google Sheet data only.")
-    except Exception as e:
-        st.error(f"Error loading local 'courses.csv': {e}")
+        st.error("Error: 'courses.csv' not found. Please ensure the file is present in the working directory.")
         st.stop()
-
-    # 2. Load data from Google Sheet URL
-    try:
-        # Fetch data from the Google Sheet via its CSV export link
-        sheet_df = pd.read_csv(GOOGLE_SHEET_URL)
-        all_data.append(sheet_df)
-        st.toast("Successfully loaded courses from Google Sheet!", icon="🌐")
     except Exception as e:
-        st.warning(f"Warning: Could not load data from Google Sheet. Using local data only. Details: {e}")
-
-    if not all_data:
-        st.error("Error: No course data could be loaded from any source.")
+        st.error(f"Error loading 'courses.csv': {e}")
         st.stop()
-
-    # 3. Combine and Clean DataFrames
-    courses_df = pd.concat(all_data, ignore_index=True)
-    
+        
     # Drop rows where Title is missing (handles empty CSV rows)
     courses_df = courses_df.dropna(subset=['Title']).reset_index(drop=True)
     
@@ -333,7 +308,7 @@ if "recommendations_df" not in st.session_state:
 st.set_page_config(layout="wide", page_title="AI Learning Path Recommender")
 st.title("💡 AI-Powered Personalized Learning Path Recommender")
 try:
-    # Load data now combines local and Google Sheet data
+    # Load data now relies only on courses.csv
     COURSES_DF, COURSE_EMBEDDINGS = load_data()
     MODEL = load_model()
     LLM_CLIENT = setup_llm()
