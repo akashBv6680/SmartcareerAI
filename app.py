@@ -383,7 +383,6 @@ except Exception as e:
 # Load Sample Profiles
 try:
     # NOTE: The user has not provided 'profiles.json'. Using an empty dict for stability.
-    # To fix this, create a 'profiles.json' file in your directory.
     SAMPLE_PROFILES = {} 
     # with open('profiles.json', 'r') as f:
     #     SAMPLE_PROFILES = json.load(f)
@@ -538,7 +537,9 @@ with col_output:
                 # --- TTS EXECUTION ---
                 if st.session_state.tts_enabled and st.session_state.tts_engine != "None":
                     lang_name = st.session_state.tts_language
-                    lang_code = LANGUAGE_DICT.get(lang_name, "en")
+                    # This line retrieves the language code. The "en" is a safe default
+                    # in case the language name in session state is somehow invalid.
+                    lang_code = LANGUAGE_DICT.get(lang_name, "en") 
                     tts_engine = st.session_state.tts_engine
                     
                     audio_data = text_to_speech_conversion(
