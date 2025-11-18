@@ -183,6 +183,8 @@ def generate_llm_rationale(client, user_profile, course_row, timeline_type):
 
     Sentence 1 (Matching): Explain which existing user skills connect to the course content.
     Sentence 2 (Gap/Next Step): Explain what new, specific skill or knowledge gap this course fills for the user's target domain.
+    
+    Ensure the final output is in **English** as this function is for the recommendation *display*. The chat RAG function handles translation.
     """
     try:
         response = client.models.generate_content(
@@ -253,18 +255,23 @@ def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
         )
     return context.strip()
 
+# --- MODIFIED FUNCTION TO INCLUDE TRANSLATION INSTRUCTION ---
 def run_rag_query(query, courses_df, course_embeddings, model, llm_client, static_kb_text):
     """
-    RAG Query function that explicitly models the agent as having two tools.
+    RAG Query function that explicitly models the agent as having two tools and
+    instructs the LLM to translate its final output based on the user's TTS selection.
+    This ensures the chat text output matches the selected voice language.
     """
     if not llm_client:
         return "The AI Agent is not initialized. Please ensure the Gemini API key is set."
+    
+    # --- FIX: Retrieve the user's desired output language for translation ---
+    target_language_name = st.session_state.get('tts_language', 'English')
     
     # 1. Dynamic Course Retrieval (Vector Search)
     course_context_vector = get_rag_context(query, courses_df, course_embeddings, model)
     
     # 2. Combine all knowledge sources for the LLM
-    # The LLM is instructed to use the most relevant "tool" (context or general knowledge)
     full_context = f"""
     --- TOOL 1: Course Catalog (Retrieved Document Context via Vector Search) ---
     {course_context_vector}
@@ -279,6 +286,9 @@ def run_rag_query(query, courses_df, course_embeddings, model, llm_client, stati
     * **If the query is about a specific course, price, duration, link, or prerequisite, use TOOL 1 (the Course Catalog).** Summarize the details (title, provider, level, link) based ONLY on the catalog content. If the information is not in the catalog, state that.
     * **If the query is for a general definition, concept explanation (e.g., 'What is Docker?'), or soft skill advice, use TOOL 2 (your General Knowledge).** Do not use the Course Catalog for these general questions.
 
+    --- IMPORTANT INSTRUCTION ---
+    **After generating your response, you MUST translate the ENTIRE reply into the following target language:** **{target_language_name}**.
+    
     User Query: "{query}"
     Context (TOOL 1): {full_context}
     """
@@ -450,6 +460,7 @@ with col_input:
     st.session_state.tts_enabled = st.checkbox("Enable Text-to-Speech (TTS) Reply", value=st.session_state.tts_enabled)
     if st.session_state.tts_enabled:
         selected_lang_name = st.selectbox("Select Voice Language:", list(LANGUAGE_DICT.keys()), key='tts_language_selector', index=list(LANGUAGE_DICT.keys()).index(st.session_state.tts_language) if st.session_state.tts_language in LANGUAGE_DICT else 0)
+        # Store selected language name
         st.session_state.tts_language = selected_lang_name
         
         available_engines = []
@@ -530,15 +541,15 @@ with col_output:
                 st.markdown(prompt)
             with st.chat_message("assistant"):
                 with st.spinner("Searching catalog and knowledge base..."):
-                    # Call RAG with the static KB text included
+                    # Call RAG with the static KB text included - This is the function that now handles translation
                     response_text = run_rag_query(prompt, COURSES_DF, COURSE_EMBEDDINGS, MODEL, LLM_CLIENT, KNOWLEDGE_BASE_TEXT)
                 st.markdown(response_text)
                 
                 # --- TTS EXECUTION ---
+                # This part is unchanged as it already correctly uses the selected language (e.g., Tamil)
                 if st.session_state.tts_enabled and st.session_state.tts_engine != "None":
                     lang_name = st.session_state.tts_language
-                    # This line retrieves the language code. The "en" is a safe default
-                    # in case the language name in session state is somehow invalid.
+                    # The "en" is a safe default in case lang_name is invalid
                     lang_code = LANGUAGE_DICT.get(lang_name, "en") 
                     tts_engine = st.session_state.tts_engine
                     
