@@ -4,34 +4,39 @@ import numpy as np
 import json
 import os
 import io
-import asyncio 
+import asyncio
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
 
-# Optional TTS engines
+# --- TTS ENGINE SETUP ---
+# NOTE: For TTS to work, you must install the required libraries:
+# For gTTS (generally easier): pip install gtts
+# For edge_tts: pip install edge-tts
 try:
     import edge_tts
-except Exception:
+except ImportError:
     edge_tts = None
+    # st.info("Edge TTS is not available. Install 'edge-tts' for this option.")
 try:
     from gtts import gTTS
-except Exception:
+except ImportError:
     gTTS = None
+    # st.info("gTTS is not available. Install 'gtts' for this option.")
 
 # --- CONFIGURATION ---
 LANGUAGE_DICT = {
-    "English": "en", "Spanish": "es", "Arabic": "ar", "French": "fr", "German": "de", 
-    "Hindi": "hi", "Tamil": "ta", "bn": "Bengali", "Japanese": "ja", "Korean": "ko", 
-    "Russian": "ru", "Chinese (Simplified)": "zh-Hans", "Portuguese": "pt", "Italian": "it", 
+    "English": "en", "Spanish": "es", "Arabic": "ar", "French": "fr", "German": "de",
+    "Hindi": "hi", "Tamil": "ta", "Bengali": "bn", "Japanese": "ja", "Korean": "ko",
+    "Russian": "ru", "Chinese (Simplified)": "zh-cn", "Portuguese": "pt", "Italian": "it",
     "Dutch": "nl", "Turkish": "tr"
 }
 EDGE_TTS_VOICE_DICT = {
-    "English": "en-US-AriaNeural", "Spanish": "es-ES-ElviraNeural", "Arabic": "ar-EG-SalmaNeural", 
-    "French": "fr-FR-DeniseNeural", "German": "de-DE-KatjaNeural", "Hindi": "hi-IN-SwaraNeural", 
-    "Tamil": "ta-IN-PallaviNeural", "Bengali": "bn-IN-TanishaaNeural", "Japanese": "ja-JP-NanamiNeural", 
-    "Korean": "ko-KR-SunHiNeural", "Russian": "ru-RU-SvetlanaNeural", "Chinese (Simplified)": "zh-CN-XiaoxiaoNeural", 
-    "Portuguese": "pt-PT-FernandaNeural", "Italian": "it-IT-ElsaNeural", "Dutch": "nl-NL-ColetteNeural", 
+    "English": "en-US-AriaNeural", "Spanish": "es-ES-ElviraNeural", "Arabic": "ar-EG-SalmaNeural",
+    "French": "fr-FR-DeniseNeural", "German": "de-DE-KatjaNeural", "Hindi": "hi-IN-SwaraNeural",
+    "Tamil": "ta-IN-PallaviNeural", "Bengali": "bn-IN-TanishaaNeural", "Japanese": "ja-JP-NanamiNeural",
+    "Korean": "ko-KR-SunHiNeural", "Russian": "ru-RU-SvetlanaNeural", "Chinese (Simplified)": "zh-CN-XiaoxiaoNeural",
+    "Portuguese": "pt-PT-FernandaNeural", "Italian": "it-IT-ElsaNeural", "Dutch": "nl-NL-ColetteNeural",
     "Turkish": "tr-TR-EmelNeural"
 }
 DEFAULT_LANGUAGE = "English"
@@ -91,12 +96,17 @@ def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
 @st.cache_data
-def load_data():
+def load_data(knowledge_base_text):
     """
-    Loads data ONLY from the local courses.csv file for vector embeddings.
+    Loads data for course embeddings. Uses the static knowledge_base_text 
+    for stability, ensuring the app works without a local 'courses.csv' file.
     """
-    # Load courses only from the local file
-    courses_df = pd.read_csv('courses.csv')
+    try:
+        # Use StringIO to read the static CSV string as if it were a file
+        courses_df = pd.read_csv(io.StringIO(knowledge_base_text))
+    except Exception as e:
+        st.error(f"Failed to process knowledge base text: {e}")
+        return pd.DataFrame(), np.array([])
         
     # Data Cleaning and Preparation
     courses_df = courses_df.dropna(subset=['Title']).reset_index(drop=True)
@@ -127,7 +137,7 @@ def generate_user_embedding(user_profile, model):
     
     profile_text = (
         f"Goal: {goal}. Career focus is strictly on {goal}. "
-        f"Seeking courses in {goal} and {goal}. " 
+        f"Seeking courses in {goal} and {goal}. "
         f"Education: {user_profile['education_level']} in {user_profile['major']}. "
         f"Existing Skills: {user_profile['technical_skills']}."
     )
@@ -226,7 +236,7 @@ def recommend_courses(user_profile, courses_df, course_embeddings, model, llm_cl
 
 def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
     """Retrieves the most relevant course data using vector search."""
-    if courses_df is None or course_embeddings is None:
+    if courses_df.empty or course_embeddings.size == 0:
         return "Course data is unavailable."
 
     query_embed = model.encode([query])[0].reshape(1, -1)
@@ -245,9 +255,7 @@ def get_rag_context(query, courses_df, course_embeddings, model, top_k=5):
 
 def run_rag_query(query, courses_df, course_embeddings, model, llm_client, static_kb_text):
     """
-    RAG Query function that explicitly models the agent as having two tools:
-    1. Course Catalog (retrieved context)
-    2. General LLM Knowledge
+    RAG Query function that explicitly models the agent as having two tools.
     """
     if not llm_client:
         return "The AI Agent is not initialized. Please ensure the Gemini API key is set."
@@ -285,11 +293,16 @@ def run_rag_query(query, courses_df, course_embeddings, model, llm_client, stati
 # --- TEXT-TO-SPEECH (TTS) LOGIC ---
 
 def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English"):
+    # Truncate text for TTS to avoid hitting limits or timeout issues with external services
+    if len(text) > 500:
+        text = text[:500] + "..." 
+        
     try:
         if not text.strip():
             raise ValueError("Text to convert is empty.")
             
         if engine == "edge_tts" and edge_tts is not None:
+            # NOTE: Running async code via asyncio.run() can sometimes cause issues in Streamlit.
             voice_name = EDGE_TTS_VOICE_DICT.get(lang_name, "en-US-AriaNeural")
             communicate = edge_tts.Communicate(text, voice_name)
             audio_bytes = b""
@@ -313,20 +326,20 @@ def text_to_speech_conversion(text, lang_code, engine="gtts", lang_name="English
                 raise RuntimeError("Edge TTS returned no audio data.")
 
             return io.BytesIO(audio_bytes)
-        
+            
         elif engine == "gtts" and gTTS is not None:
             tts = gTTS(text=text, lang=lang_code)
             mp3_fp = io.BytesIO()
             tts.write_to_fp(mp3_fp)
             mp3_fp.seek(0)
             return mp3_fp
-        
+            
         else:
-            st.warning("No functional TTS engine available or selected.")
+            st.warning(f"TTS engine '{engine}' is selected but not functional or installed.")
             return None
             
     except Exception as e:
-        st.warning(f"TTS Error: Could not generate speech. Details: {e}")
+        st.warning(f"TTS Error: Could not generate speech with {engine}. Details: {e}")
         return None
 
 # --- STREAMLIT UI CODE ---
@@ -337,39 +350,43 @@ if "tts_enabled" not in st.session_state:
     st.session_state.tts_enabled = False
 if "tts_language" not in st.session_state:
     st.session_state.tts_language = DEFAULT_LANGUAGE
+# Determine the initial default engine based on availability
+initial_tts_engine = "gtts" if gTTS else ("edge_tts" if edge_tts else "None")
 if "tts_engine" not in st.session_state:
-    st.session_state.tts_engine = "gtts" if gTTS else ("edge_tts" if edge_tts else "None")
-if "recommendations_df" not in st.session_state:
-    st.session_state.recommendations_df = pd.DataFrame()
+    st.session_state.tts_engine = initial_tts_engine
 
 
 st.set_page_config(layout="wide", page_title="AI Learning Path Recommender")
 st.title("💡 AI-Powered Personalized Learning Path Recommender")
 
-# --- Initialize variables before the try block (Fix for NameError) ---
-COURSES_DF = None
-COURSE_EMBEDDINGS = None
+# --- Initialize variables before the try block ---
+COURSES_DF = pd.DataFrame() # Initialize to empty DataFrame
+COURSE_EMBEDDINGS = np.array([]) # Initialize to empty array
 MODEL = None
 LLM_CLIENT = None
 
 # Load data and models
 try:
-    COURSES_DF, COURSE_EMBEDDINGS = load_data()
+    # UPDATED: Pass the KNOWLEDGE_BASE_TEXT to load_data for stability
+    COURSES_DF, COURSE_EMBEDDINGS = load_data(KNOWLEDGE_BASE_TEXT)
     MODEL = load_model()
     LLM_CLIENT = setup_llm()
     # Now that the loading succeeded, display the toast
-    st.toast(f"Knowledge Base loaded with {len(COURSES_DF)} unique courses.", icon="🧠")
-except FileNotFoundError:
-    st.error("🚨 Error: 'courses.csv' not found. Please ensure the file is present in the working directory.")
+    if not COURSES_DF.empty:
+        st.toast(f"Knowledge Base loaded with {len(COURSES_DF)} unique courses.", icon="🧠")
+    else:
+        st.error("No course data was loaded from the knowledge base.")
+
 except Exception as e:
     st.error(f"⚠️ Could not initialize system components. Check API keys and data files. Error: {e}.")
     
 # Load Sample Profiles
 try:
-    with open('profiles.json', 'r') as f:
-        SAMPLE_PROFILES = json.load(f)
-except FileNotFoundError:
-    SAMPLE_PROFILES = {}
+    # NOTE: The user has not provided 'profiles.json'. Using an empty dict for stability.
+    # To fix this, create a 'profiles.json' file in your directory.
+    SAMPLE_PROFILES = {} 
+    # with open('profiles.json', 'r') as f:
+    #     SAMPLE_PROFILES = json.load(f)
 except Exception:
     SAMPLE_PROFILES = {}
 
@@ -413,8 +430,8 @@ with col_input:
     
     # Execution logic for generating the path 
     if st.button("🚀 Generate Learning Path", type="primary"):
-        if COURSES_DF is None or LLM_CLIENT is None:
-            st.warning("Cannot generate path: Core system components (data or AI agent) failed to load.")
+        if COURSES_DF.empty or LLM_CLIENT is None:
+            st.warning("Cannot generate path: Core system components (data or AI agent) failed to load. Check errors above.")
         elif not USER_PROFILE['technical_skills'].strip() or not USER_PROFILE['target_domain'].strip():
             st.error("Please provide at least your Technical Skills and Target Career Domain.")
         else:
@@ -439,8 +456,12 @@ with col_input:
         available_engines = []
         if gTTS: available_engines.append("gtts")
         if edge_tts: available_engines.append("edge_tts")
-        if not available_engines: available_engines.append("None")
+        if not available_engines: available_engines.append("None (Install gtts or edge-tts)")
 
+        # Ensure the current engine is still valid or select the best available
+        if st.session_state.tts_engine not in available_engines or st.session_state.tts_engine == "None":
+            st.session_state.tts_engine = available_engines[0] if available_engines and available_engines[0] != "None (Install gtts or edge-tts)" else "None"
+            
         current_engine_index = available_engines.index(st.session_state.tts_engine) if st.session_state.tts_engine in available_engines else 0
         st.session_state.tts_engine = st.selectbox("TTS Engine", available_engines, index=current_engine_index)
 
@@ -496,14 +517,14 @@ with col_output:
     st.header("💬 PersonalAI Course Recommender (RAG Agent)")
     st.caption("Ask questions about the courses in the catalog (e.g., 'What is the deep learning specialization?' or 'Find the Docker course link').")
     
-    if COURSES_DF is None or LLM_CLIENT is None:
+    if COURSES_DF.empty or LLM_CLIENT is None:
         st.warning("Chat is disabled: Data or AI Agent failed to load during initialization.")
     
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             
-    if COURSES_DF is not None and LLM_CLIENT is not None:
+    if not COURSES_DF.empty and LLM_CLIENT is not None:
         if prompt := st.chat_input("Ask a question about the courses in the catalog or a general tech concept..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
