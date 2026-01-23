@@ -6,3 +6,4 @@ numpy
 google-genai
 edge-tts
 gTTS
+PyPDF2
